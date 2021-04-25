@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+
+#include "qca9558_mikrotik_routerboard-96x.dtsi"
+
+/ {
+	leds {
+		compatible = "gpio-leds";
+
+		sfp {
+			label = "green:sfp";
+			gpios = <&gpio 2 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&spi {
+	spidev@2 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "mikrotik,poe-v3";
+		reg = <2>;
+		spi-max-frequency = <2200000>;
+
+		port@1 {
+			compatible = "mikrotik,poeport";
+			reg = <1>;
+			label = "lan5";
+		};
+
+		port@2 {
+			compatible = "mikrotik,poeport";
+			reg = <2>;
+			label = "lan4";
+		};
+
+		port@3 {
+			compatible = "mikrotik,poeport";
+			reg = <3>;
+			label = "lan3";
+		};
+
+		port@4 {
+			compatible = "mikrotik,poeport";
+			reg = <4>;
+			label = "lan2";
+		};
+	};
+};

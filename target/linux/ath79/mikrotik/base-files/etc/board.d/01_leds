@@ -42,6 +42,10 @@ mikrotik,routerboard-952ui-5ac2nd)
 	ucidef_set_led_switch "port4" "port4" "green:port4" "switch0" "0x04"
 	ucidef_set_led_switch "port5" "port5" "green:port5" "switch0" "0x02"
 	;;
+mikrotik,routerboard-960pgs|\
+mikrotik,routerboard-960gup)
+	ucidef_set_led_netdev "sfp" "SFP" "green:sfp" "sfp"
+	;;
 mikrotik,routerboard-lhg-2nd|\
 mikrotik,routerboard-mapl-2nd|\
 mikrotik,routerboard-wap-2nd)
