@@ -6,7 +6,7 @@
  
 +config GPIO_RTL838X
 +	tristate "RTL838X GPIO"
-+	depends on RTL838X
++	depends on RTL83XX
 +	help
 +	Say yes here to support RTL838X GPIO on RTL93xx SoCs.
 +
