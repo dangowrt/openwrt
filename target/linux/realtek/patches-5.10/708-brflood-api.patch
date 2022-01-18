@@ -1,0 +1,165 @@
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/b53/b53_common.c linux-5.10.59/drivers/net/dsa/b53/b53_common.c
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/b53/b53_common.c.orig linux-5.10.59/drivers/net/dsa/b53/b53_common.c.orig
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/b53/b53_priv.h.orig linux-5.10.59/drivers/net/dsa/b53/b53_priv.h.orig
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/b53/b53_priv.h.rej linux-5.10.59/drivers/net/dsa/b53/b53_priv.h.rej
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/mv88e6xxx/chip.c linux-5.10.59/drivers/net/dsa/mv88e6xxx/chip.c
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/mv88e6xxx/chip.c.orig linux-5.10.59/drivers/net/dsa/mv88e6xxx/chip.c.orig
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/mv88e6xxx/chip.c.rej linux-5.10.59/drivers/net/dsa/mv88e6xxx/chip.c.rej
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/mv88e6xxx/chip.h linux-5.10.59/drivers/net/dsa/mv88e6xxx/chip.h
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/mv88e6xxx/chip.h.orig linux-5.10.59/drivers/net/dsa/mv88e6xxx/chip.h.orig
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/mv88e6xxx/port.c linux-5.10.59/drivers/net/dsa/mv88e6xxx/port.c
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/mv88e6xxx/port.c.orig linux-5.10.59/drivers/net/dsa/mv88e6xxx/port.c.orig
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/mv88e6xxx/port.h linux-5.10.59/drivers/net/dsa/mv88e6xxx/port.h
+diff -urpN linux-5.10.59.old2/drivers/net/dsa/mv88e6xxx/port.h.orig linux-5.10.59/drivers/net/dsa/mv88e6xxx/port.h.orig
+diff -urpN linux-5.10.59.old2/include/net/dsa.h linux-5.10.59/include/net/dsa.h
+--- linux-5.10.59.old2/include/net/dsa.h	2021-08-17 21:27:20.953160439 +0700
++++ linux-5.10.59/include/net/dsa.h	2021-08-17 21:31:54.189450536 +0700
+@@ -595,8 +595,14 @@ struct dsa_switch_ops {
+ 	void	(*port_stp_state_set)(struct dsa_switch *ds, int port,
+ 				      u8 state);
+ 	void	(*port_fast_age)(struct dsa_switch *ds, int port);
+-	int	(*port_egress_floods)(struct dsa_switch *ds, int port,
+-				      bool unicast, bool multicast);
++	int	(*port_pre_bridge_flags)(struct dsa_switch *ds, int port,
++					 unsigned long flags,
++					 struct netlink_ext_ack *extack);
++	int	(*port_bridge_flags)(struct dsa_switch *ds, int port,
++				     unsigned long flags,
++				     struct netlink_ext_ack *extack);
++	int	(*port_set_mrouter)(struct dsa_switch *ds, int port, bool mrouter,
++				    struct netlink_ext_ack *extack);
+ 
+ 	/*
+ 	 * VLAN support
+diff -urpN linux-5.10.59.old2/include/net/dsa.h.orig linux-5.10.59/include/net/dsa.h.orig
+diff -urpN linux-5.10.59.old2/net/dsa/dsa_priv.h linux-5.10.59/net/dsa/dsa_priv.h
+--- linux-5.10.59.old2/net/dsa/dsa_priv.h	2021-08-17 21:27:47.645188920 +0700
++++ linux-5.10.59/net/dsa/dsa_priv.h	2021-08-17 21:31:54.189450536 +0700
+@@ -184,11 +184,11 @@ int dsa_port_mdb_add(const struct dsa_po
+ int dsa_port_mdb_del(const struct dsa_port *dp,
+ 		     const struct switchdev_obj_port_mdb *mdb);
+ int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long flags,
+-			      struct switchdev_trans *trans);
++			      struct switchdev_trans *trans, struct netlink_ext_ack *extack);
+ int dsa_port_bridge_flags(const struct dsa_port *dp, unsigned long flags,
+-			  struct switchdev_trans *trans);
++			  struct switchdev_trans *trans, struct netlink_ext_ack *extack);
+ int dsa_port_mrouter(struct dsa_port *dp, bool mrouter,
+-		     struct switchdev_trans *trans);
++		     struct switchdev_trans *trans, struct netlink_ext_ack *extack);
+ int dsa_port_vlan_add(struct dsa_port *dp,
+ 		      const struct switchdev_obj_port_vlan *vlan,
+ 		      struct switchdev_trans *trans);
+diff -urpN linux-5.10.59.old2/net/dsa/dsa_priv.h.orig linux-5.10.59/net/dsa/dsa_priv.h.orig
+diff -urpN linux-5.10.59.old2/net/dsa/port.c linux-5.10.59/net/dsa/port.c
+--- linux-5.10.59.old2/net/dsa/port.c	2021-08-17 21:27:20.953160439 +0700
++++ linux-5.10.59/net/dsa/port.c	2021-08-17 21:31:54.189450536 +0700
+@@ -145,7 +145,7 @@ int dsa_port_bridge_join(struct dsa_port
+ 	int err;
+ 
+ 	/* Set the flooding mode before joining the port in the switch */
+-	err = dsa_port_bridge_flags(dp, BR_FLOOD | BR_MCAST_FLOOD, NULL);
++	err = dsa_port_bridge_flags(dp, BR_FLOOD | BR_MCAST_FLOOD, NULL, NULL);
+ 	if (err)
+ 		return err;
+ 
+@@ -158,7 +158,7 @@ int dsa_port_bridge_join(struct dsa_port
+ 
+ 	/* The bridging is rolled back on error */
+ 	if (err) {
+-		dsa_port_bridge_flags(dp, 0, NULL);
++		dsa_port_bridge_flags(dp, 0, NULL, NULL);
+ 		dp->bridge_dev = NULL;
+ 	}
+ 
+@@ -185,7 +185,7 @@ void dsa_port_bridge_leave(struct dsa_po
+ 		pr_err("DSA: failed to notify DSA_NOTIFIER_BRIDGE_LEAVE\n");
+ 
+ 	/* Port is leaving the bridge, disable flooding */
+-	dsa_port_bridge_flags(dp, 0, NULL);
++	dsa_port_bridge_flags(dp, 0, NULL, NULL);
+ 
+ 	/* Port left the bridge, put in BR_STATE_DISABLED by the bridge layer,
+ 	 * so allow it to be in BR_STATE_FORWARDING to be kept functional
+@@ -412,44 +412,44 @@ int dsa_port_ageing_time(struct dsa_port
+ }
+ 
+ int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long flags,
+-			      struct switchdev_trans *trans)
++			      struct switchdev_trans *trans, struct netlink_ext_ack *extack)
+ {
+ 	struct dsa_switch *ds = dp->ds;
+ 
+-	if (!ds->ops->port_egress_floods ||
+-	    (flags & ~(BR_FLOOD | BR_MCAST_FLOOD)))
++	if (!ds->ops->port_pre_bridge_flags)
+ 		return -EINVAL;
+ 
+-	return 0;
++	return ds->ops->port_pre_bridge_flags(ds, dp->index, flags, extack);
+ }
+ 
+ int dsa_port_bridge_flags(const struct dsa_port *dp, unsigned long flags,
+-			  struct switchdev_trans *trans)
++			  struct switchdev_trans *trans, struct netlink_ext_ack *extack)
+ {
+ 	struct dsa_switch *ds = dp->ds;
+-	int port = dp->index;
+-	int err = 0;
+ 
+ 	if (switchdev_trans_ph_prepare(trans))
+ 		return 0;
+ 
+-	if (ds->ops->port_egress_floods)
+-		err = ds->ops->port_egress_floods(ds, port, flags & BR_FLOOD,
+-						  flags & BR_MCAST_FLOOD);
++	if (!ds->ops->port_bridge_flags)
++		return -EINVAL;
++ 
++	return ds->ops->port_bridge_flags(ds, dp->index, flags, extack);
+ 
+-	return err;
+ }
+ 
+ int dsa_port_mrouter(struct dsa_port *dp, bool mrouter,
+-		     struct switchdev_trans *trans)
++		     struct switchdev_trans *trans,
++		     struct netlink_ext_ack *extack)
+ {
+ 	struct dsa_switch *ds = dp->ds;
+-	int port = dp->index;
+ 
+ 	if (switchdev_trans_ph_prepare(trans))
+-		return ds->ops->port_egress_floods ? 0 : -EOPNOTSUPP;
++		return ds->ops->port_set_mrouter ? 0 : -EOPNOTSUPP;
++
++	if (!ds->ops->port_set_mrouter)
++ 		return -EOPNOTSUPP;
+ 
+-	return ds->ops->port_egress_floods(ds, port, true, mrouter);
++	return ds->ops->port_set_mrouter(ds, dp->index, mrouter, extack);
+ }
+ 
+ int dsa_port_mtu_change(struct dsa_port *dp, int new_mtu,
+diff -urpN linux-5.10.59.old2/net/dsa/port.c.orig linux-5.10.59/net/dsa/port.c.orig
+diff -urpN linux-5.10.59.old2/net/dsa/slave.c linux-5.10.59/net/dsa/slave.c
+--- linux-5.10.59.old2/net/dsa/slave.c	2021-08-17 21:27:20.953160439 +0700
++++ linux-5.10.59/net/dsa/slave.c	2021-08-17 21:31:54.189450536 +0700
+@@ -293,13 +293,13 @@ static int dsa_slave_port_attr_set(struc
+ 		break;
+ 	case SWITCHDEV_ATTR_ID_PORT_PRE_BRIDGE_FLAGS:
+ 		ret = dsa_port_pre_bridge_flags(dp, attr->u.brport_flags,
+-						trans);
++						trans, NULL);
+ 		break;
+ 	case SWITCHDEV_ATTR_ID_PORT_BRIDGE_FLAGS:
+-		ret = dsa_port_bridge_flags(dp, attr->u.brport_flags, trans);
++		ret = dsa_port_bridge_flags(dp, attr->u.brport_flags, trans, NULL);
+ 		break;
+ 	case SWITCHDEV_ATTR_ID_BRIDGE_MROUTER:
+-		ret = dsa_port_mrouter(dp->cpu_dp, attr->u.mrouter, trans);
++		ret = dsa_port_mrouter(dp->cpu_dp, attr->u.mrouter, trans, NULL);
+ 		break;
+ 	default:
+ 		ret = -EOPNOTSUPP;
+diff -urpN linux-5.10.59.old2/net/dsa/slave.c.orig linux-5.10.59/net/dsa/slave.c.orig
