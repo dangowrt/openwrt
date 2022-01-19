@@ -1,0 +1,77 @@
+diff -urpN linux-5.10.64.old/arch/mips/Makefile linux-5.10.64/arch/mips/Makefile
+--- linux-5.10.64.old/arch/mips/Makefile	2021-09-19 22:13:28.766756417 +0700
++++ linux-5.10.64/arch/mips/Makefile	2021-09-19 22:20:20.314444243 +0700
+@@ -307,14 +307,24 @@ endif
+ 
+ KBUILD_AFLAGS	+= $(cflags-y)
+ KBUILD_CFLAGS	+= $(cflags-y)
++ifdef CONFIG_931X
++KBUILD_CPPFLAGS += -DVMLINUX_LOAD_ADDRESS=$(load-y)
++bootvars-y	= VMLINUX_LOAD_ADDRESS=$(load-y) \
++		  VMLINUX_ENTRY_ADDRESS=$(entry-y) \
++		  PLATFORM="$(platform-y)" \
++		  ITS_INPUTS="$(its-y)"
++else
+ KBUILD_CPPFLAGS += -DVMLINUX_LOAD_ADDRESS=$(load-y) -DLINKER_LOAD_ADDRESS=$(load-ld)
+-KBUILD_CPPFLAGS += -DDATAOFFSET=$(if $(dataoffset-y),$(dataoffset-y),0)
+-
+ bootvars-y	= VMLINUX_LOAD_ADDRESS=$(load-y) \
+ 		  LINKER_LOAD_ADDRESS=$(load-ld) \
+ 		  VMLINUX_ENTRY_ADDRESS=$(entry-y) \
+ 		  PLATFORM="$(platform-y)" \
+ 		  ITS_INPUTS="$(its-y)"
++endif
++KBUILD_CPPFLAGS += -DDATAOFFSET=$(if $(dataoffset-y),$(dataoffset-y),0)
++
++
++
+ ifdef CONFIG_32BIT
+ bootvars-y	+= ADDR_BITS=32
+ endif
+diff -urpN linux-5.10.64.old/arch/mips/kernel/head.S linux-5.10.64/arch/mips/kernel/head.S
+--- linux-5.10.64.old/arch/mips/kernel/head.S	2021-09-19 22:13:28.970756261 +0700
++++ linux-5.10.64/arch/mips/kernel/head.S	2021-09-19 22:23:31.826300998 +0700
+@@ -60,12 +60,14 @@
+ 	.endm
+ 
+ #ifndef CONFIG_NO_EXCEPT_FILL
++#ifndef CONFIG_RTL931X
+ 	/*
+ 	 * Reserved space for exception handlers.
+ 	 * Necessary for machines which link their kernels at KSEG0.
+ 	 */
+ 	.fill	0x400
+ #endif
++#endif
+ 
+ EXPORT(_stext)
+ 
+@@ -79,11 +81,13 @@ FEXPORT(__kernel_entry)
+ 	j	kernel_entry
+ #endif /* CONFIG_BOOT_RAW */
+ 
++#ifndef CONFIG_RTL931X
+ #ifdef CONFIG_IMAGE_CMDLINE_HACK
+ 	.ascii	"CMDLINE:"
+ EXPORT(__image_cmdline)
+ 	.fill	0x400
+ #endif /* CONFIG_IMAGE_CMDLINE_HACK */
++#endif
+ 
+ 	__REF
+ 
+diff -urpN linux-5.10.64.old/arch/mips/kernel/vmlinux.lds.S linux-5.10.64/arch/mips/kernel/vmlinux.lds.S
+--- linux-5.10.64.old/arch/mips/kernel/vmlinux.lds.S	2021-09-12 13:58:28.000000000 +0700
++++ linux-5.10.64/arch/mips/kernel/vmlinux.lds.S	2021-09-19 22:21:19.458400005 +0700
+@@ -55,7 +55,11 @@ SECTIONS
+ 	/* . = 0xa800000000300000; */
+ 	. = 0xffffffff80300000;
+ #endif
++#ifdef CONFIG_RTL931X
++	. = 0x80220000;
++#else
+ 	. = LINKER_LOAD_ADDRESS;
++#endif
+ 	/* read-only */
+ 	_text = .;	/* Text and read-only data */
+ 	.text : {
