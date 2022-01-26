@@ -1,0 +1,44 @@
+From beb4c6b6e4c186ffaec860a7c5f83ff582c37413 Mon Sep 17 00:00:00 2001
+From: Oskari Lemmela <oskari@lemmela.net>
+Date: Fri, 3 Dec 2021 15:28:49 +0200
+Subject: [PATCH] hwmon: support for mikrotik poe
+
+Signed-off-by: Oskari Lemmela <oskari@lemmela.net>
+---
+ drivers/hwmon/Kconfig  | 13 +++++++++++++
+ drivers/hwmon/Makefile |  2 ++
+ 2 files changed, 15 insertions(+)
+
+--- a/drivers/hwmon/Kconfig
++++ b/drivers/hwmon/Kconfig
+@@ -1810,6 +1810,19 @@ config SENSORS_RASPBERRYPI_HWMON
+ 	  This driver can also be built as a module. If so, the module
+ 	  will be called raspberrypi-hwmon.
+ 
++config SENSORS_MIKROTIK_POE
++	tristate "Mikrotik POE driver"
++	select CRC8
++	depends on SPI
++        help
++          If you say yes here you get support for Mikrotik POE
++
++config SENSORS_MIKROTIK_POEPORT
++	tristate "Mikrotik POE port driver"
++	depends on SENSORS_MIKROTIK_POE
++        help
++          If you say yes here you get support for Mikrotik POE
++
+ config SENSORS_SL28CPLD
+ 	tristate "Kontron sl28cpld hardware monitoring driver"
+ 	depends on MFD_SL28CPLD || COMPILE_TEST
+--- a/drivers/hwmon/Makefile
++++ b/drivers/hwmon/Makefile
+@@ -188,6 +188,8 @@ obj-$(CONFIG_SENSORS_POWR1220)  += powr1
+ obj-$(CONFIG_SENSORS_PT5161L)	+= pt5161l.o
+ obj-$(CONFIG_SENSORS_PWM_FAN)	+= pwm-fan.o
+ obj-$(CONFIG_SENSORS_RASPBERRYPI_HWMON)	+= raspberrypi-hwmon.o
++obj-$(CONFIG_SENSORS_MIKROTIK_POE)	+= rbpoe.o
++obj-$(CONFIG_SENSORS_MIKROTIK_POEPORT)	+= rbpoeport.o
+ obj-$(CONFIG_SENSORS_SBTSI)	+= sbtsi_temp.o
+ obj-$(CONFIG_SENSORS_SBRMI)	+= sbrmi.o
+ obj-$(CONFIG_SENSORS_SCH56XX_COMMON)+= sch56xx-common.o
