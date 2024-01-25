@@ -59,7 +59,11 @@ $(curdir)/merge-index: $(curdir)/merge
 	(cd $(PACKAGE_DIR_ALL) && $(SCRIPT_DIR)/ipkg-make-index.sh . 2>&1 > Packages; )
 
 ifndef SDK
+ifneq ($(CONFIG_USE_APK),)
+  $(curdir)/compile: $(curdir)/system/apk/host/compile
+else
   $(curdir)/compile: $(curdir)/system/opkg/host/compile
+endif
 endif
 
 $(curdir)/install: $(TMP_DIR)/.build $(curdir)/merge $(if $(CONFIG_TARGET_PER_DEVICE_ROOTFS),$(curdir)/merge-index)
