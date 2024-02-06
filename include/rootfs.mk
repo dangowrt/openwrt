@@ -50,7 +50,6 @@ apk = \
 	--keys-dir $(TOPDIR) \
 	--no-cache \
 	--no-logfile \
-	--no-scripts \
 	--preserve-env \
 	--repository file://$(PACKAGE_DIR_ALL)/packages.adb
 
@@ -92,6 +91,7 @@ define prepare_rootfs
 				exit 1; \
 			fi; \
 		done; \
+		$(if $(SOURCE_DATE_EPOCH),sed -i "s/Installed-Time: .*/Installed-Time: $(SOURCE_DATE_EPOCH)/" $(1)/usr/lib/opkg/status); \
 		fi; \
 		for script in ./etc/init.d/*; do \
 			grep '#!/bin/sh /etc/rc.common' $$script >/dev/null || continue; \
@@ -103,7 +103,6 @@ define prepare_rootfs
 				echo "Disabling" $$(basename $$script); \
 			fi; \
 		done || true \
-		$(if $(SOURCE_DATE_EPOCH),sed -i "s/Installed-Time: .*/Installed-Time: $(SOURCE_DATE_EPOCH)/" $(1)/usr/lib/opkg/status)
 	)
 
 	@-find $(1) -name CVS -o -name .svn -o -name .git -o -name '.#*' | $(XARGS) rm -rf
