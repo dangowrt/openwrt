@@ -487,11 +487,7 @@ static void fe_get_stats64(struct net_device *dev,
 	}
 
 	do {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 		start = u64_stats_fetch_begin(&hwstats->syncp);
-#else
-		start = u64_stats_fetch_begin_irq(&hwstats->syncp);
-#endif
 		storage->rx_packets = hwstats->rx_packets;
 		storage->tx_packets = hwstats->tx_packets;
 		storage->rx_bytes = hwstats->rx_bytes;

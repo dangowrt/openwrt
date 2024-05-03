@@ -810,11 +810,7 @@ static int aw9523_init_gpiochip(struct aw9523 *awi, unsigned int npins)
 	gpiochip->set_multiple = aw9523_gpio_set_multiple;
 	gpiochip->set_config = gpiochip_generic_config;
 	gpiochip->parent = dev;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 	gpiochip->fwnode = dev->fwnode;
-#else
-	gpiochip->of_node = dev->of_node;
-#endif
 	gpiochip->owner = THIS_MODULE;
 	gpiochip->can_sleep = true;
 
