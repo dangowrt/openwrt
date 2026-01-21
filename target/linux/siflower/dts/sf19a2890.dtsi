@@ -114,6 +114,8 @@
 			reset-names = "stmmaceth";
 			pinctrl-names = "default";
 			pinctrl-0 = <&rgmii_pins>, <&mdio_pins>;
+			tx-fifo-depth = <2048>;
+			rx-fifo-depth = <2048>;
 			status = "disabled";
 
 			mdio: mdio {

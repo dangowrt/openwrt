@@ -8,6 +8,9 @@ siflower_setup_interfaces()
 	local board="$1"
 
 	case $board in
+	glinet,gl-sft1200)
+		ucidef_set_interfaces_lan_wan "lan1 lan2" "wan"
+		;;
 	siflower,sf19a2890-evb)
 		ucidef_add_switch "switch0" \
 			"0:wan" "1:lan" "2:lan" "3:lan" "4:lan" "6@eth0"
