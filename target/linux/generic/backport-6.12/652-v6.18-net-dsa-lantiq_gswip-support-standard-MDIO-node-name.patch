@@ -1,0 +1,31 @@
+From 6c8a1fd7e80848851f9941f452dddffe1eaec3b3 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Sat, 30 Aug 2025 03:34:23 +0100
+Subject: [PATCH 12/50] net: dsa: lantiq_gswip: support standard MDIO node name
+
+Instead of matching against the child node's compatible string also
+support locating the node of the device tree node of the MDIO bus
+in the standard way by referencing the node name ("mdio").
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+Reviewed-by: Andrew Lunn <andrew@lunn.ch>
+Reviewed-by: Alexander Sverdlin <alexander.sverdlin@siemens.com>
+Reviewed-by: Hauke Mehrtens <hauke@hauke-m.de>
+Link: https://patch.msgid.link/5a9a3d659ef0d8b7eca37fb69ec87ff5a3192820.1756520811.git.daniel@makrotopia.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/dsa/lantiq/lantiq_gswip.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/net/dsa/lantiq/lantiq_gswip.c
++++ b/drivers/net/dsa/lantiq/lantiq_gswip.c
+@@ -286,6 +286,9 @@ static int gswip_mdio(struct gswip_priv
+ 	int err = 0;
+ 
+ 	mdio_np = of_get_compatible_child(switch_np, "lantiq,xrx200-mdio");
++	if (!mdio_np)
++		mdio_np = of_get_child_by_name(switch_np, "mdio");
++
+ 	if (!of_device_is_available(mdio_np))
+ 		goto out_put_node;
+ 

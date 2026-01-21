@@ -1,0 +1,78 @@
+From 4ac9578f25f264277a65ebf64812dc9a50ce7458 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Sat, 30 Aug 2025 03:34:13 +0100
+Subject: [PATCH 11/50] net: dsa: lantiq_gswip: support offset of MII registers
+
+The MaxLinear GSW1xx family got a single (R)(G)MII port at index 5 but
+the registers MII_PCDU and MII_CFG are those of port 0.
+Allow applying an offset for the port index to access those registers.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+Reviewed-by: Hauke Mehrtens <hauke@hauke-m.de>
+Link: https://patch.msgid.link/88145164c1f948e4ae9b04706f408359cf54223c.1756520811.git.daniel@makrotopia.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/dsa/lantiq/lantiq_gswip.c | 14 ++++++++++++--
+ drivers/net/dsa/lantiq/lantiq_gswip.h |  1 +
+ 2 files changed, 13 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/dsa/lantiq/lantiq_gswip.c
++++ b/drivers/net/dsa/lantiq/lantiq_gswip.c
+@@ -183,21 +183,29 @@ static void gswip_mii_mask(struct gswip_
+ static void gswip_mii_mask_cfg(struct gswip_priv *priv, u32 clear, u32 set,
+ 			       int port)
+ {
++	int reg_port;
++
+ 	/* MII_CFG register only exists for MII ports */
+ 	if (!(priv->hw_info->mii_ports & BIT(port)))
+ 		return;
+ 
+-	gswip_mii_mask(priv, clear, set, GSWIP_MII_CFGp(port));
++	reg_port = port + priv->hw_info->mii_port_reg_offset;
++
++	gswip_mii_mask(priv, clear, set, GSWIP_MII_CFGp(reg_port));
+ }
+ 
+ static void gswip_mii_mask_pcdu(struct gswip_priv *priv, u32 clear, u32 set,
+ 				int port)
+ {
++	int reg_port;
++
+ 	/* MII_PCDU register only exists for MII ports */
+ 	if (!(priv->hw_info->mii_ports & BIT(port)))
+ 		return;
+ 
+-	switch (port) {
++	reg_port = port + priv->hw_info->mii_port_reg_offset;
++
++	switch (reg_port) {
+ 	case 0:
+ 		gswip_mii_mask(priv, clear, set, GSWIP_MII_PCDU0);
+ 		break;
+@@ -2039,6 +2047,7 @@ static const struct gswip_hw_info gswip_
+ 	.max_ports = 7,
+ 	.allowed_cpu_ports = BIT(6),
+ 	.mii_ports = BIT(0) | BIT(1) | BIT(5),
++	.mii_port_reg_offset = 0,
+ 	.phylink_get_caps = gswip_xrx200_phylink_get_caps,
+ 	.pce_microcode = &gswip_pce_microcode,
+ 	.pce_microcode_size = ARRAY_SIZE(gswip_pce_microcode),
+@@ -2049,6 +2058,7 @@ static const struct gswip_hw_info gswip_
+ 	.max_ports = 7,
+ 	.allowed_cpu_ports = BIT(6),
+ 	.mii_ports = BIT(0) | BIT(5),
++	.mii_port_reg_offset = 0,
+ 	.phylink_get_caps = gswip_xrx300_phylink_get_caps,
+ 	.pce_microcode = &gswip_pce_microcode,
+ 	.pce_microcode_size = ARRAY_SIZE(gswip_pce_microcode),
+--- a/drivers/net/dsa/lantiq/lantiq_gswip.h
++++ b/drivers/net/dsa/lantiq/lantiq_gswip.h
+@@ -233,6 +233,7 @@ struct gswip_hw_info {
+ 	int max_ports;
+ 	unsigned int allowed_cpu_ports;
+ 	unsigned int mii_ports;
++	int mii_port_reg_offset;
+ 	const struct gswip_pce_microcode (*pce_microcode)[];
+ 	size_t pce_microcode_size;
+ 	enum dsa_tag_protocol tag_protocol;

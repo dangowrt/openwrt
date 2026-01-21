@@ -705,6 +705,18 @@ endef
 
 $(eval $(call KernelPackage,dsa-b53-mdio))
 
+define KernelPackage/dsa-lantiq-gswip-common
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Lantiq/Intel/MaxLinear GSWIP library
+  DEPENDS:=+kmod-dsa
+  KCONFIG:=CONFIG_NET_DSA_LANTIQ_COMMON
+  HIDDEN:=1
+  FILES:=$(LINUX_DIR)/drivers/net/dsa/lantiq/lantiq_gswip_common.ko
+  AUTOLOAD:=$(call AutoLoad,40,lantiq_gswip_common,1)
+endef
+
+$(eval $(call KernelPackage,dsa-lantiq-gswip-common))
+
 define KernelPackage/dsa-mv88e6060
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Marvell MV88E6060 DSA Switch
@@ -745,6 +757,31 @@ define KernelPackage/dsa-mv88e6xxx/description
 endef
 
 $(eval $(call KernelPackage,dsa-mv88e6xxx))
+
+define KernelPackage/dsa-mxl-gsw1xx
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=MaxLinear/Intel GSW1xx
+  DEPENDS:=+kmod-dsa-lantiq-gswip-common +kmod-phy-intel-xway
+  KCONFIG:= \
+	CONFIG_NET_DSA_MXL_GSW1XX \
+	CONFIG_NET_DSA_TAG_MXL_GSW1XX
+  FILES:= \
+	$(LINUX_DIR)/net/dsa/tag_mxl-gsw1xx.ko \
+	$(LINUX_DIR)/drivers/net/dsa/lantiq/mxl-gsw1xx.ko
+  AUTOLOAD:=$(call AutoLoad,41,tag_mxl-gsw1xx mxl-gsw1xx,1)
+endef
+
+define KernelPackage/dsa-mxl-gsw1xx/description
+  Kernel modules for MaxLinear and Intel 1G switches
+   * Intel GSW150 7 port, 5 PHYs, 1x GMII/RGMII, 1x RGMII
+   * MaxLinear GSW120 4 port, 2 PHYs, RGMII & SGMII/2500Base-X
+   * MaxLinear GSW125 4 port, 2 PHYs, RGMII & SGMII/2500Base-X, industrial temperature
+   * MaxLinear GSW140 6 port, 4 PHYs, RGMII & SGMII/2500Base-X
+   * MaxLinear GSW141 6 port, 4 PHYs, RGMII & SGMII
+   * MaxLinear GSW145 6 port, 4 PHYs, RGMII & SGMII/2500Base-X, industrial temperature
+endef
+
+$(eval $(call KernelPackage,dsa-mxl-gsw1xx))
 
 define KernelPackage/dsa-qca8k
   SUBMENU:=$(NETWORK_DEVICES_MENU)

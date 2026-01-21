@@ -1,0 +1,107 @@
+From a96d202e511505addf953766106e5213119b00f4 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Fri, 22 Aug 2025 17:12:06 +0100
+Subject: [PATCH 05/50] net: dsa: lantiq_gswip: load model-specific microcode
+
+Load microcode as specified in struct hw_info instead of relying on
+a single array of instructions. This is done in preparation to allow
+loading different microcode for the MaxLinear GSW1xx family.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+Reviewed-by: Vladimir Oltean <olteanv@gmail.com>
+Link: https://patch.msgid.link/486d95c085913d506745fbe4a0ab5d1ebdc3ed63.1755878232.git.daniel@makrotopia.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/dsa/lantiq_gswip.c | 14 +++++++++-----
+ drivers/net/dsa/lantiq_gswip.h |  9 +++++++++
+ drivers/net/dsa/lantiq_pce.h   |  9 ++-------
+ 3 files changed, 20 insertions(+), 12 deletions(-)
+
+--- a/drivers/net/dsa/lantiq_gswip.c
++++ b/drivers/net/dsa/lantiq_gswip.c
+@@ -509,15 +509,15 @@ static int gswip_pce_load_microcode(stru
+ 			  GSWIP_PCE_TBL_CTRL_OPMOD_ADWR, GSWIP_PCE_TBL_CTRL);
+ 	gswip_switch_w(priv, 0, GSWIP_PCE_TBL_MASK);
+ 
+-	for (i = 0; i < ARRAY_SIZE(gswip_pce_microcode); i++) {
++	for (i = 0; i < priv->hw_info->pce_microcode_size; i++) {
+ 		gswip_switch_w(priv, i, GSWIP_PCE_TBL_ADDR);
+-		gswip_switch_w(priv, gswip_pce_microcode[i].val_0,
++		gswip_switch_w(priv, (*priv->hw_info->pce_microcode)[i].val_0,
+ 			       GSWIP_PCE_TBL_VAL(0));
+-		gswip_switch_w(priv, gswip_pce_microcode[i].val_1,
++		gswip_switch_w(priv, (*priv->hw_info->pce_microcode)[i].val_1,
+ 			       GSWIP_PCE_TBL_VAL(1));
+-		gswip_switch_w(priv, gswip_pce_microcode[i].val_2,
++		gswip_switch_w(priv, (*priv->hw_info->pce_microcode)[i].val_2,
+ 			       GSWIP_PCE_TBL_VAL(2));
+-		gswip_switch_w(priv, gswip_pce_microcode[i].val_3,
++		gswip_switch_w(priv, (*priv->hw_info->pce_microcode)[i].val_3,
+ 			       GSWIP_PCE_TBL_VAL(3));
+ 
+ 		/* start the table access: */
+@@ -2012,6 +2012,8 @@ static const struct gswip_hw_info gswip_
+ 	.allowed_cpu_ports = BIT(6),
+ 	.mii_ports = BIT(0) | BIT(1) | BIT(5),
+ 	.phylink_get_caps = gswip_xrx200_phylink_get_caps,
++	.pce_microcode = &gswip_pce_microcode,
++	.pce_microcode_size = ARRAY_SIZE(gswip_pce_microcode),
+ };
+ 
+ static const struct gswip_hw_info gswip_xrx300 = {
+@@ -2019,6 +2021,8 @@ static const struct gswip_hw_info gswip_
+ 	.allowed_cpu_ports = BIT(6),
+ 	.mii_ports = BIT(0) | BIT(5),
+ 	.phylink_get_caps = gswip_xrx300_phylink_get_caps,
++	.pce_microcode = &gswip_pce_microcode,
++	.pce_microcode_size = ARRAY_SIZE(gswip_pce_microcode),
+ };
+ 
+ static const struct of_device_id gswip_of_match[] = {
+--- a/drivers/net/dsa/lantiq_gswip.h
++++ b/drivers/net/dsa/lantiq_gswip.h
+@@ -213,10 +213,19 @@
+  */
+ #define GSWIP_MAX_PACKET_LENGTH	2400
+ 
++struct gswip_pce_microcode {
++	u16 val_3;
++	u16 val_2;
++	u16 val_1;
++	u16 val_0;
++};
++
+ struct gswip_hw_info {
+ 	int max_ports;
+ 	unsigned int allowed_cpu_ports;
+ 	unsigned int mii_ports;
++	const struct gswip_pce_microcode (*pce_microcode)[];
++	size_t pce_microcode_size;
+ 	void (*phylink_get_caps)(struct dsa_switch *ds, int port,
+ 				 struct phylink_config *config);
+ };
+--- a/drivers/net/dsa/lantiq_pce.h
++++ b/drivers/net/dsa/lantiq_pce.h
+@@ -7,6 +7,8 @@
+  * Copyright (C) 2017 - 2018 Hauke Mehrtens <hauke@hauke-m.de>
+  */
+ 
++#include "lantiq_gswip.h"
++
+ enum {
+ 	OUT_MAC0 = 0,
+ 	OUT_MAC1,
+@@ -74,13 +76,6 @@ enum {
+ 	FLAG_NO,	/*13*/
+ };
+ 
+-struct gswip_pce_microcode {
+-	u16 val_3;
+-	u16 val_2;
+-	u16 val_1;
+-	u16 val_0;
+-};
+-
+ #define MC_ENTRY(val, msk, ns, out, len, type, flags, ipv4_len) \
+ 	{ val, msk, ((ns) << 10 | (out) << 4 | (len) >> 1),\
+ 		((len) & 1) << 15 | (type) << 13 | (flags) << 9 | (ipv4_len) << 8 }

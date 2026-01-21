@@ -1,0 +1,70 @@
+From 4522f802b0200e6b75b6846e867cf4512129682e Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Sat, 30 Aug 2025 03:33:00 +0100
+Subject: [PATCH 09/50] net: dsa: lantiq_gswip: support model-specific
+ mac_select_pcs()
+
+Call mac_select_pcs() function if provided in struct gswip_hwinfo.
+The MaxLinear GSW1xx series got one port wired to a SerDes PCS and
+PHY which can do 1000Base-X, 2500Base-X and SGMII. Support for the
+SerDes port will be provided using phylink_pcs, so provide a
+convenient way for mac_select_pcs() to differ based on the hardware
+model.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+Reviewed-by: Hauke Mehrtens <hauke@hauke-m.de>
+Link: https://patch.msgid.link/7668666aa51e43e7f2a6cbcf36eb5a0a3020998f.1756520811.git.daniel@makrotopia.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/dsa/lantiq/lantiq_gswip.c | 19 ++++++++++++++++---
+ drivers/net/dsa/lantiq/lantiq_gswip.h |  3 +++
+ 2 files changed, 19 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/dsa/lantiq/lantiq_gswip.c
++++ b/drivers/net/dsa/lantiq/lantiq_gswip.c
+@@ -1602,10 +1602,23 @@ static int gswip_get_sset_count(struct d
+ 	return ARRAY_SIZE(gswip_rmon_cnt);
+ }
+ 
++static struct phylink_pcs *gswip_phylink_mac_select_pcs(struct phylink_config *config,
++							phy_interface_t interface)
++{
++	struct dsa_port *dp = dsa_phylink_to_port(config);
++	struct gswip_priv *priv = dp->ds->priv;
++
++	if (priv->hw_info->mac_select_pcs)
++		return priv->hw_info->mac_select_pcs(config, interface);
++
++	return NULL;
++}
++
+ static const struct phylink_mac_ops gswip_phylink_mac_ops = {
+-	.mac_config	= gswip_phylink_mac_config,
+-	.mac_link_down	= gswip_phylink_mac_link_down,
+-	.mac_link_up	= gswip_phylink_mac_link_up,
++	.mac_config		= gswip_phylink_mac_config,
++	.mac_link_down		= gswip_phylink_mac_link_down,
++	.mac_link_up		= gswip_phylink_mac_link_up,
++	.mac_select_pcs		= gswip_phylink_mac_select_pcs,
+ };
+ 
+ static const struct dsa_switch_ops gswip_switch_ops = {
+--- a/drivers/net/dsa/lantiq/lantiq_gswip.h
++++ b/drivers/net/dsa/lantiq/lantiq_gswip.h
+@@ -4,6 +4,7 @@
+ 
+ #include <linux/clk.h>
+ #include <linux/mutex.h>
++#include <linux/phylink.h>
+ #include <linux/platform_device.h>
+ #include <linux/regmap.h>
+ #include <linux/reset.h>
+@@ -237,6 +238,8 @@ struct gswip_hw_info {
+ 	enum dsa_tag_protocol tag_protocol;
+ 	void (*phylink_get_caps)(struct dsa_switch *ds, int port,
+ 				 struct phylink_config *config);
++	struct phylink_pcs *(*mac_select_pcs)(struct phylink_config *config,
++					      phy_interface_t interface);
+ };
+ 
+ struct gswip_gphy_fw {

@@ -1,0 +1,217 @@
+From 0b4471ba393ad69902295fc380f61fe970459718 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Sun, 18 Jan 2026 03:22:08 +0000
+Subject: [PATCH 47/50] net: dsa: lantiq: allow arbitrary MII registers
+
+The Lantiq GSWIP and MaxLinear GSW1xx drivers are currently relying on a
+hard-coded mapping of MII ports to their respective MII_CFG and MII_PCDU
+registers and only allow applying an offset to the port index.
+
+While this is sufficient for the currently supported hardware, the very
+similar Intel GSW150 (aka. Lantiq PEB7084) cannot be described using
+this arrangement.
+
+Introduce two arrays to specify the MII_CFG and MII_PCDU registers for
+each port, replacing the current bitmap used to safeguard MII ports as
+well as the port index offset.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+---
+ drivers/net/dsa/lantiq/lantiq_gswip.c        | 34 ++++++++++++++----
+ drivers/net/dsa/lantiq/lantiq_gswip.h        |  6 ++--
+ drivers/net/dsa/lantiq/lantiq_gswip_common.c | 27 +++------------
+ drivers/net/dsa/lantiq/mxl-gsw1xx.c          | 36 ++++++++++++++++----
+ 4 files changed, 66 insertions(+), 37 deletions(-)
+
+--- a/drivers/net/dsa/lantiq/lantiq_gswip.c
++++ b/drivers/net/dsa/lantiq/lantiq_gswip.c
+@@ -464,10 +464,22 @@ static void gswip_shutdown(struct platfo
+ }
+ 
+ static const struct gswip_hw_info gswip_xrx200 = {
+-	.max_ports = 7,
++	.max_ports = GSWIP_MAX_PORTS,
+ 	.allowed_cpu_ports = BIT(6),
+-	.mii_ports = BIT(0) | BIT(1) | BIT(5),
+-	.mii_port_reg_offset = 0,
++	.mii_cfg = {
++		[0] = GSWIP_MII_CFGp(0),
++		[1] = GSWIP_MII_CFGp(1),
++		[2 ... 4] = -1,
++		[5] = GSWIP_MII_CFGp(5),
++		[6] = -1,
++	},
++	.mii_pcdu = {
++		[0] = GSWIP_MII_PCDU0,
++		[1] = GSWIP_MII_PCDU1,
++		[2 ... 4] = -1,
++		[5] = GSWIP_MII_PCDU5,
++		[6] = -1,
++	},
+ 	.phylink_get_caps = gswip_xrx200_phylink_get_caps,
+ 	.pce_microcode = &gswip_pce_microcode,
+ 	.pce_microcode_size = ARRAY_SIZE(gswip_pce_microcode),
+@@ -475,10 +487,20 @@ static const struct gswip_hw_info gswip_
+ };
+ 
+ static const struct gswip_hw_info gswip_xrx300 = {
+-	.max_ports = 7,
++	.max_ports = GSWIP_MAX_PORTS,
+ 	.allowed_cpu_ports = BIT(6),
+-	.mii_ports = BIT(0) | BIT(5),
+-	.mii_port_reg_offset = 0,
++	.mii_cfg = {
++		[0] = GSWIP_MII_CFGp(0),
++		[1 ... 4] = -1,
++		[5] = GSWIP_MII_CFGp(5),
++		[6] = -1,
++	},
++	.mii_pcdu = {
++		[0] = GSWIP_MII_PCDU0,
++		[1 ... 4] = -1,
++		[5] = GSWIP_MII_PCDU5,
++		[6] = -1,
++	},
+ 	.phylink_get_caps = gswip_xrx300_phylink_get_caps,
+ 	.pce_microcode = &gswip_pce_microcode,
+ 	.pce_microcode_size = ARRAY_SIZE(gswip_pce_microcode),
+--- a/drivers/net/dsa/lantiq/lantiq_gswip.h
++++ b/drivers/net/dsa/lantiq/lantiq_gswip.h
+@@ -236,6 +236,8 @@
+ 
+ #define GSWIP_VLAN_UNAWARE_PVID	0
+ 
++#define GSWIP_MAX_PORTS		7
++
+ struct gswip_pce_microcode {
+ 	u16 val_3;
+ 	u16 val_2;
+@@ -246,8 +248,8 @@ struct gswip_pce_microcode {
+ struct gswip_hw_info {
+ 	int max_ports;
+ 	unsigned int allowed_cpu_ports;
+-	unsigned int mii_ports;
+-	int mii_port_reg_offset;
++	s16 mii_cfg[GSWIP_MAX_PORTS];
++	s16 mii_pcdu[GSWIP_MAX_PORTS];
+ 	bool supports_2500m;
+ 	const struct gswip_pce_microcode (*pce_microcode)[];
+ 	size_t pce_microcode_size;
+--- a/drivers/net/dsa/lantiq/lantiq_gswip_common.c
++++ b/drivers/net/dsa/lantiq/lantiq_gswip_common.c
+@@ -118,15 +118,11 @@ static u32 gswip_switch_r_timeout(struct
+ static void gswip_mii_mask_cfg(struct gswip_priv *priv, u32 mask, u32 set,
+ 			       int port)
+ {
+-	int reg_port;
+-
+ 	/* MII_CFG register only exists for MII ports */
+-	if (!(priv->hw_info->mii_ports & BIT(port)))
++	if (priv->hw_info->mii_cfg[port] == -1)
+ 		return;
+ 
+-	reg_port = port + priv->hw_info->mii_port_reg_offset;
+-
+-	regmap_write_bits(priv->mii, GSWIP_MII_CFGp(reg_port), mask,
++	regmap_write_bits(priv->mii, priv->hw_info->mii_cfg[port], mask,
+ 			  set);
+ }
+ 
+@@ -610,28 +606,13 @@ static void gswip_mii_delay_setup(struct
+ 	u32 tx_delay = GSWIP_MII_PCDU_TXDLY_DEFAULT;
+ 	u32 rx_delay = GSWIP_MII_PCDU_RXDLY_DEFAULT;
+ 	struct device_node *port_dn = dp->dn;
+-	u16 mii_pcdu_reg;
+ 
+ 	/* As MII_PCDU registers only exist for MII ports, silently return
+ 	 * unless the port is an MII port
+ 	 */
+-	if (!(priv->hw_info->mii_ports & BIT(dp->index)))
++	if (priv->hw_info->mii_pcdu[dp->index] == -1)
+ 		return;
+ 
+-	switch (dp->index + priv->hw_info->mii_port_reg_offset) {
+-	case 0:
+-		mii_pcdu_reg = GSWIP_MII_PCDU0;
+-		break;
+-	case 1:
+-		mii_pcdu_reg = GSWIP_MII_PCDU1;
+-		break;
+-	case 5:
+-		mii_pcdu_reg = GSWIP_MII_PCDU5;
+-		break;
+-	default:
+-		return;
+-	}
+-
+ 	/* legacy code to set default delays according to the interface mode */
+ 	switch (interface) {
+ 	case PHY_INTERFACE_MODE_RGMII_ID:
+@@ -652,7 +633,7 @@ static void gswip_mii_delay_setup(struct
+ 	of_property_read_u32(port_dn, "rx-internal-delay-ps", &rx_delay);
+ 	of_property_read_u32(port_dn, "tx-internal-delay-ps", &tx_delay);
+ 
+-	regmap_write_bits(priv->mii, mii_pcdu_reg,
++	regmap_write_bits(priv->mii, priv->hw_info->mii_pcdu[dp->index],
+ 			  GSWIP_MII_PCDU_TXDLY_MASK |
+ 			  GSWIP_MII_PCDU_RXDLY_MASK,
+ 			  GSWIP_MII_PCDU_TXDLY(tx_delay) |
+--- a/drivers/net/dsa/lantiq/mxl-gsw1xx.c
++++ b/drivers/net/dsa/lantiq/mxl-gsw1xx.c
+@@ -726,8 +726,16 @@ static void gsw1xx_shutdown(struct mdio_
+ static const struct gswip_hw_info gsw12x_data = {
+ 	.max_ports		= GSW1XX_PORTS,
+ 	.allowed_cpu_ports	= BIT(GSW1XX_MII_PORT) | BIT(GSW1XX_SGMII_PORT),
+-	.mii_ports		= BIT(GSW1XX_MII_PORT),
+-	.mii_port_reg_offset	= -GSW1XX_MII_PORT,
++	.mii_cfg = {
++		[0 ... GSW1XX_MII_PORT - 1] = -1,
++		[GSW1XX_MII_PORT] = GSWIP_MII_CFGp(0),
++		[GSW1XX_MII_PORT + 1 ... GSWIP_MAX_PORTS - 1] = -1,
++	},
++	.mii_pcdu = {
++		[0 ... GSW1XX_MII_PORT - 1] = -1,
++		[GSW1XX_MII_PORT] = GSWIP_MII_PCDU0,
++		[GSW1XX_MII_PORT + 1 ... GSWIP_MAX_PORTS - 1] = -1,
++	},
+ 	.mac_select_pcs		= gsw1xx_phylink_mac_select_pcs,
+ 	.phylink_get_caps	= &gsw1xx_phylink_get_caps,
+ 	.supports_2500m		= true,
+@@ -740,8 +748,16 @@ static const struct gswip_hw_info gsw12x
+ static const struct gswip_hw_info gsw140_data = {
+ 	.max_ports		= GSW1XX_PORTS,
+ 	.allowed_cpu_ports	= BIT(GSW1XX_MII_PORT) | BIT(GSW1XX_SGMII_PORT),
+-	.mii_ports		= BIT(GSW1XX_MII_PORT),
+-	.mii_port_reg_offset	= -GSW1XX_MII_PORT,
++	.mii_cfg = {
++		[0 ... GSW1XX_MII_PORT - 1] = -1,
++		[GSW1XX_MII_PORT] = GSWIP_MII_CFGp(0),
++		[GSW1XX_MII_PORT + 1 ... GSWIP_MAX_PORTS - 1] = -1,
++	},
++	.mii_pcdu = {
++		[0 ... GSW1XX_MII_PORT - 1] = -1,
++		[GSW1XX_MII_PORT] = GSWIP_MII_PCDU0,
++		[GSW1XX_MII_PORT + 1 ... GSWIP_MAX_PORTS - 1] = -1,
++	},
+ 	.mac_select_pcs		= gsw1xx_phylink_mac_select_pcs,
+ 	.phylink_get_caps	= &gsw1xx_phylink_get_caps,
+ 	.supports_2500m		= true,
+@@ -754,8 +770,16 @@ static const struct gswip_hw_info gsw140
+ static const struct gswip_hw_info gsw141_data = {
+ 	.max_ports		= GSW1XX_PORTS,
+ 	.allowed_cpu_ports	= BIT(GSW1XX_MII_PORT) | BIT(GSW1XX_SGMII_PORT),
+-	.mii_ports		= BIT(GSW1XX_MII_PORT),
+-	.mii_port_reg_offset	= -GSW1XX_MII_PORT,
++	.mii_cfg = {
++		[0 ... GSW1XX_MII_PORT - 1] = -1,
++		[GSW1XX_MII_PORT] = GSWIP_MII_CFGp(0),
++		[GSW1XX_MII_PORT + 1 ... GSWIP_MAX_PORTS - 1] = -1,
++	},
++	.mii_pcdu = {
++		[0 ... GSW1XX_MII_PORT - 1] = -1,
++		[GSW1XX_MII_PORT] = GSWIP_MII_PCDU0,
++		[GSW1XX_MII_PORT + 1 ... GSWIP_MAX_PORTS - 1] = -1,
++	},
+ 	.mac_select_pcs		= gsw1xx_phylink_mac_select_pcs,
+ 	.phylink_get_caps	= gsw1xx_phylink_get_caps,
+ 	.port_setup		= gsw1xx_port_setup,

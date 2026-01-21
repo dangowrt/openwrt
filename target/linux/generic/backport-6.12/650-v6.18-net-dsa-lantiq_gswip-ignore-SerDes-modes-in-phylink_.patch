@@ -1,0 +1,36 @@
+From a515f000c679eee3778636b4bab2a67e2fa1cb71 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Sat, 30 Aug 2025 03:33:48 +0100
+Subject: [PATCH 10/50] net: dsa: lantiq_gswip: ignore SerDes modes in
+ phylink_mac_config()
+
+We can safely ignore SerDes interface modes 1000Base-X, 2500Base-X and
+SGMII in phylink_mac_config() as they are being taken care of by the PCS
+and the SGMII port anyway doesn't have MII_CFG and MII_PCDU registers
+and hence gswip_phylink_mac_config() is already a no-op apart from
+outputing a misleading error message.
+
+Return early in case of SerDes interface modes to avoid printing that
+error message.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+Reviewed-by: Hauke Mehrtens <hauke@hauke-m.de>
+Link: https://patch.msgid.link/dcb066d6a02e6340314b5ff4f73937757a4f8eb3.1756520811.git.daniel@makrotopia.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/dsa/lantiq/lantiq_gswip.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/dsa/lantiq/lantiq_gswip.c
++++ b/drivers/net/dsa/lantiq/lantiq_gswip.c
+@@ -1454,6 +1454,10 @@ static void gswip_phylink_mac_config(str
+ 	miicfg |= GSWIP_MII_CFG_LDCLKDIS;
+ 
+ 	switch (state->interface) {
++	case PHY_INTERFACE_MODE_SGMII:
++	case PHY_INTERFACE_MODE_1000BASEX:
++	case PHY_INTERFACE_MODE_2500BASEX:
++		return;
+ 	case PHY_INTERFACE_MODE_MII:
+ 	case PHY_INTERFACE_MODE_INTERNAL:
+ 		miicfg |= GSWIP_MII_CFG_MODE_MIIM;

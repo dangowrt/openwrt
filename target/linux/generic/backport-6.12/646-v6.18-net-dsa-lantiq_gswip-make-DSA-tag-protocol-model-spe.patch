@@ -1,0 +1,61 @@
+From 69d9339a2b7eaab9f5b9f6c59a3d2f378120fc6b Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Fri, 22 Aug 2025 17:12:13 +0100
+Subject: [PATCH 06/50] net: dsa: lantiq_gswip: make DSA tag protocol
+ model-specific
+
+While the older Lantiq / Intel which are currently supported all use
+the DSA_TAG_GSWIP tagging protocol, newer MaxLinear GSW1xx modules use
+another 8-byte tagging protocol. Move the tag protocol information to
+struct gswip_hw_info to make it possible for new models to specify
+a different tagging protocol.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+Reviewed-by: Andrew Lunn <andrew@lunn.ch>
+Reviewed-by: Vladimir Oltean <olteanv@gmail.com>
+Link: https://patch.msgid.link/841281b62fdb472048fa98fbad6c88dfbf512825.1755878232.git.daniel@makrotopia.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/dsa/lantiq_gswip.c | 6 +++++-
+ drivers/net/dsa/lantiq_gswip.h | 1 +
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/dsa/lantiq_gswip.c
++++ b/drivers/net/dsa/lantiq_gswip.c
+@@ -668,7 +668,9 @@ static enum dsa_tag_protocol gswip_get_t
+ 						    int port,
+ 						    enum dsa_tag_protocol mp)
+ {
+-	return DSA_TAG_PROTO_GSWIP;
++	struct gswip_priv *priv = ds->priv;
++
++	return priv->hw_info->tag_protocol;
+ }
+ 
+ static int gswip_vlan_active_create(struct gswip_priv *priv,
+@@ -2014,6 +2016,7 @@ static const struct gswip_hw_info gswip_
+ 	.phylink_get_caps = gswip_xrx200_phylink_get_caps,
+ 	.pce_microcode = &gswip_pce_microcode,
+ 	.pce_microcode_size = ARRAY_SIZE(gswip_pce_microcode),
++	.tag_protocol = DSA_TAG_PROTO_GSWIP,
+ };
+ 
+ static const struct gswip_hw_info gswip_xrx300 = {
+@@ -2023,6 +2026,7 @@ static const struct gswip_hw_info gswip_
+ 	.phylink_get_caps = gswip_xrx300_phylink_get_caps,
+ 	.pce_microcode = &gswip_pce_microcode,
+ 	.pce_microcode_size = ARRAY_SIZE(gswip_pce_microcode),
++	.tag_protocol = DSA_TAG_PROTO_GSWIP,
+ };
+ 
+ static const struct of_device_id gswip_of_match[] = {
+--- a/drivers/net/dsa/lantiq_gswip.h
++++ b/drivers/net/dsa/lantiq_gswip.h
+@@ -226,6 +226,7 @@ struct gswip_hw_info {
+ 	unsigned int mii_ports;
+ 	const struct gswip_pce_microcode (*pce_microcode)[];
+ 	size_t pce_microcode_size;
++	enum dsa_tag_protocol tag_protocol;
+ 	void (*phylink_get_caps)(struct dsa_switch *ds, int port,
+ 				 struct phylink_config *config);
+ };

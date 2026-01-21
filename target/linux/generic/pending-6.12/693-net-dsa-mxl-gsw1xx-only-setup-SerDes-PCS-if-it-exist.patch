@@ -1,0 +1,54 @@
+From 3d47d7d1dfe0dc7baf58eb45fa685b40479599eb Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Sun, 18 Jan 2026 03:26:13 +0000
+Subject: [PATCH 49/50] net: dsa: mxl-gsw1xx: only setup SerDes PCS if it
+ exists
+
+Older Intel GSW150 chip doesn't have a SGMII/1000Base-X/2500Base-X PCS.
+Prepare for supporting Intel GSW150 by skipping PCS reset and
+initialization in case no .mac_select_pcs operation is defined.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+---
+ drivers/net/dsa/lantiq/mxl-gsw1xx.c | 37 ++++++++++++++++++-----------
+ 1 file changed, 23 insertions(+), 14 deletions(-)
+
+--- a/drivers/net/dsa/lantiq/mxl-gsw1xx.c
++++ b/drivers/net/dsa/lantiq/mxl-gsw1xx.c
+@@ -631,6 +631,21 @@ static struct regmap *gsw1xx_regmap_init
+ 				priv, &config);
+ }
+ 
++static int gsw1xx_serdes_pcs_init(struct gsw1xx_priv *priv)
++{
++	/* do nothing if the chip doesn't have a SerDes PCS */
++	if (!priv->gswip.hw_info->mac_select_pcs)
++		return 0;
++
++	priv->pcs.ops = &gsw1xx_pcs_ops;
++	priv->pcs.poll = true;
++	priv->tbi_interface = PHY_INTERFACE_MODE_NA;
++
++	/* assert SGMII reset to power down SGMII unit */
++	return regmap_set_bits(priv->shell, GSW1XX_SHELL_RST_REQ,
++			       GSW1XX_RST_REQ_SGMII_SHELL);
++}
++
+ static int gsw1xx_probe(struct mdio_device *mdiodev)
+ {
+ 	struct device *dev = &mdiodev->dev;
+@@ -683,13 +698,7 @@ static int gsw1xx_probe(struct mdio_devi
+ 	if (IS_ERR(priv->shell))
+ 		return PTR_ERR(priv->shell);
+ 
+-	priv->pcs.ops = &gsw1xx_pcs_ops;
+-	priv->pcs.poll = true;
+-	priv->tbi_interface = PHY_INTERFACE_MODE_NA;
+-
+-	/* assert SGMII reset to power down SGMII unit */
+-	ret = regmap_set_bits(priv->shell, GSW1XX_SHELL_RST_REQ,
+-			      GSW1XX_RST_REQ_SGMII_SHELL);
++	ret = gsw1xx_serdes_pcs_init(priv);
+ 	if (ret < 0)
+ 		return ret;
+ 

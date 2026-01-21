@@ -1,0 +1,49 @@
+From 2f38d62108de110bca99147801797fad8931e682 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Sat, 30 Aug 2025 03:34:48 +0100
+Subject: [PATCH 13/50] net: dsa: lantiq_gswip: move MDIO bus registration to
+ .setup()
+
+Instead of registering the switch MDIO bus in the probe() function, move
+the call to gswip_mdio() into the .setup() DSA switch op, so it can be
+reused independently of the probe() function.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+Reviewed-by: Andrew Lunn <andrew@lunn.ch>
+Reviewed-by: Hauke Mehrtens <hauke@hauke-m.de>
+Link: https://patch.msgid.link/2650602042c0bfdc5664b88d59071ed4dca96c26.1756520811.git.daniel@makrotopia.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/dsa/lantiq/lantiq_gswip.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+--- a/drivers/net/dsa/lantiq/lantiq_gswip.c
++++ b/drivers/net/dsa/lantiq/lantiq_gswip.c
+@@ -636,6 +636,13 @@ static int gswip_setup(struct dsa_switch
+ 	/* Configure the MDIO Clock 2.5 MHz */
+ 	gswip_mdio_mask(priv, 0xff, 0x09, GSWIP_MDIO_MDC_CFG1);
+ 
++	/* bring up the mdio bus */
++	err = gswip_mdio(priv);
++	if (err) {
++		dev_err(priv->dev, "mdio bus setup failed\n");
++		return err;
++	}
++
+ 	/* Disable the xMII interface and clear it's isolation bit */
+ 	for (i = 0; i < priv->hw_info->max_ports; i++)
+ 		gswip_mii_mask_cfg(priv,
+@@ -1985,13 +1992,6 @@ static int gswip_probe(struct platform_d
+ 					     "gphy fw probe failed\n");
+ 	}
+ 
+-	/* bring up the mdio bus */
+-	err = gswip_mdio(priv);
+-	if (err) {
+-		dev_err_probe(dev, err, "mdio probe failed\n");
+-		goto gphy_fw_remove;
+-	}
+-
+ 	err = dsa_register_switch(priv->ds);
+ 	if (err) {
+ 		dev_err_probe(dev, err, "dsa switch registration failed\n");

@@ -1,0 +1,80 @@
+From fda4195553e141a9cde8a37a7518d8539b1bd3b6 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Sun, 18 Jan 2026 03:25:52 +0000
+Subject: [PATCH 48/50] net: dsa: lantiq: clean up phylink_get_caps switch
+ statement
+
+Use case ranges for phylink_get_caps and remove the redundant "port N:"
+from the comments.
+
+Suggested-by: Vladimir Oltean <olteanv@gmail.com>
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+---
+ drivers/net/dsa/lantiq/lantiq_gswip.c | 12 +++---------
+ drivers/net/dsa/lantiq/mxl-gsw1xx.c   | 11 +++++------
+ 2 files changed, 8 insertions(+), 15 deletions(-)
+
+--- a/drivers/net/dsa/lantiq/lantiq_gswip.c
++++ b/drivers/net/dsa/lantiq/lantiq_gswip.c
+@@ -33,8 +33,7 @@ static void gswip_xrx200_phylink_get_cap
+ 					  struct phylink_config *config)
+ {
+ 	switch (port) {
+-	case 0:
+-	case 1:
++	case 0 ... 1:
+ 		phy_interface_set_rgmii(config->supported_interfaces);
+ 		__set_bit(PHY_INTERFACE_MODE_MII,
+ 			  config->supported_interfaces);
+@@ -44,9 +43,7 @@ static void gswip_xrx200_phylink_get_cap
+ 			  config->supported_interfaces);
+ 		break;
+ 
+-	case 2:
+-	case 3:
+-	case 4:
++	case 2 ... 4:
+ 	case 6:
+ 		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+ 			  config->supported_interfaces);
+@@ -75,10 +72,7 @@ static void gswip_xrx300_phylink_get_cap
+ 			  config->supported_interfaces);
+ 		break;
+ 
+-	case 1:
+-	case 2:
+-	case 3:
+-	case 4:
++	case 1 ... 4:
+ 	case 6:
+ 		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+ 			  config->supported_interfaces);
+--- a/drivers/net/dsa/lantiq/mxl-gsw1xx.c
++++ b/drivers/net/dsa/lantiq/mxl-gsw1xx.c
+@@ -510,14 +510,12 @@ static void gsw1xx_phylink_get_caps(stru
+ 				   MAC_10 | MAC_100 | MAC_1000;
+ 
+ 	switch (port) {
+-	case 0:
+-	case 1:
+-	case 2:
+-	case 3:
++	case 0 ... 3: /* built-in PHYs */
+ 		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+ 			  config->supported_interfaces);
+ 		break;
+-	case 4: /* port 4: SGMII */
++
++	case 4: /* SGMII */
+ 		__set_bit(PHY_INTERFACE_MODE_SGMII,
+ 			  config->supported_interfaces);
+ 		__set_bit(PHY_INTERFACE_MODE_1000BASEX,
+@@ -528,7 +526,7 @@ static void gsw1xx_phylink_get_caps(stru
+ 			config->mac_capabilities |= MAC_2500FD;
+ 		}
+ 		break;
+-	case 5: /* port 5: RGMII or RMII */
++	case 5: /* RGMII or RMII */
+ 		__set_bit(PHY_INTERFACE_MODE_RMII,
+ 			  config->supported_interfaces);
+ 		phy_interface_set_rgmii(config->supported_interfaces);
