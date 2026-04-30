@@ -451,7 +451,7 @@ define Build/fit-its
 		$(if $(DEVICE_DTS_LOADADDR),-s $(DEVICE_DTS_LOADADDR)) \
 		$(if $(DEVICE_DTS_OVERLAY),$(foreach dtso,$(DEVICE_DTS_OVERLAY), -O $(dtso):$(KERNEL_BUILD_DIR)/image-$(dtso).dtbo)) \
 		-c $(if $(DEVICE_DTS_CONFIG),$(DEVICE_DTS_CONFIG),"config-1") \
-		-A $(LINUX_KARCH) -v $(LINUX_VERSION)
+		-A $(if $(filter x86_64,$(ARCH)),x86_64,$(LINUX_KARCH)) -v $(LINUX_VERSION)
 endef
 
 define Build/fit-image
@@ -814,7 +814,7 @@ endef
 define Build/uImage
 	$(if $(UIMAGE_TIME),SOURCE_DATE_EPOCH="$(UIMAGE_TIME)") \
 	mkimage \
-		-A $(LINUX_KARCH) \
+		-A $(if $(filter x86_64,$(ARCH)),x86_64,$(LINUX_KARCH)) \
 		-O linux \
 		-T kernel \
 		-C $(word 1,$(1)) \
