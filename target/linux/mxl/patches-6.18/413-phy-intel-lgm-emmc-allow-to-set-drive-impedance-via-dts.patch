@@ -1,0 +1,104 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Mon, 15 Dec 2025 10:44:30 +0100
+Subject: [PATCH] phy: intel-lgm-emmc: Allow to set drive impedance via DTS
+
+The intel-lgm-emmc PHY can be configured with different drive impedance
+values. Currenlty a value of 50 Ohm is hard coded into the driver.
+
+This patch introduces the DTS property 'drive-impedance-ohm'
+for the intel-lgm-emmc phy node, which uses the value from the DTS
+to setup the drive impedance accordingly.
+
+It is based on the same changes to the phy-rockchip-emmc driver in
+commit 043f42edbf29 ("phy: rockchip-emmc: Allow to set drive impedance
+via DTS.")
+
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ drivers/phy/intel/phy-intel-lgm-emmc.c | 38 ++++++++++++++++++++++++--
+ 1 file changed, 35 insertions(+), 3 deletions(-)
+
+--- a/drivers/phy/intel/phy-intel-lgm-emmc.c
++++ b/drivers/phy/intel/phy-intel-lgm-emmc.c
+@@ -19,6 +19,11 @@
+ #define EMMC_PHYCTRL0_REG	0xa8
+ #define DR_TY_MASK		GENMASK(30, 28)
+ #define DR_TY_SHIFT(x)		(((x) << 28) & DR_TY_MASK)
++#define DR_TY_50OHM		0x0
++#define DR_TY_33OHM		0x1
++#define DR_TY_66OHM		0x2
++#define DR_TY_100OHM		0x3
++#define DR_TY_40OHM		0x4
+ #define OTAPDLYENA		BIT(14)
+ #define OTAPDLYSEL_MASK		GENMASK(13, 10)
+ #define OTAPDLYSEL_SHIFT(x)	(((x) << 10) & OTAPDLYSEL_MASK)
+@@ -46,6 +51,7 @@
+ struct intel_emmc_phy {
+ 	struct regmap *syscfg;
+ 	struct clk *emmcclk;
++	unsigned int drive_impedance;
+ };
+ 
+ static int intel_emmc_phy_power(struct phy *phy, bool on_off)
+@@ -221,11 +227,11 @@ static int intel_emmc_phy_power_on(struc
+ 	struct intel_emmc_phy *priv = phy_get_drvdata(phy);
+ 	int ret;
+ 
+-	/* Drive impedance: 50 Ohm */
++	/* Drive impedance: from DTS */
+ 	ret = regmap_update_bits(priv->syscfg, EMMC_PHYCTRL0_REG, DR_TY_MASK,
+-				 DR_TY_SHIFT(6));
++				 DR_TY_SHIFT(priv->drive_impedance));
+ 	if (ret) {
+-		dev_err(&phy->dev, "ERROR set drive-impednce-50ohm: %d\n", ret);
++		dev_err(&phy->dev, "ERROR set drive-impedance: %d\n", ret);
+ 		return ret;
+ 	}
+ 
+@@ -263,6 +269,26 @@ static const struct phy_ops ops = {
+ 	.owner		= THIS_MODULE,
+ };
+ 
++static u32 convert_drive_impedance_ohm(struct platform_device *pdev, u32 dr_ohm)
++{
++	switch (dr_ohm) {
++	case 100:
++		return DR_TY_100OHM;
++	case 66:
++		return DR_TY_66OHM;
++	case 50:
++		return DR_TY_50OHM;
++	case 40:
++		return DR_TY_40OHM;
++	case 33:
++		return DR_TY_33OHM;
++	}
++
++	dev_warn(&pdev->dev, "Invalid value %u for drive-impedance-ohm.\n",
++		 dr_ohm);
++	return DR_TY_50OHM;
++}
++
+ static int intel_emmc_phy_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+@@ -270,6 +296,7 @@ static int intel_emmc_phy_probe(struct p
+ 	struct intel_emmc_phy *priv;
+ 	struct phy *generic_phy;
+ 	struct phy_provider *phy_provider;
++	u32 val;
+ 
+ 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
+ 	if (!priv)
+@@ -282,6 +309,11 @@ static int intel_emmc_phy_probe(struct p
+ 		return PTR_ERR(priv->syscfg);
+ 	}
+ 
++	priv->drive_impedance = DR_TY_50OHM;
++
++	if (!of_property_read_u32(dev->of_node, "drive-impedance-ohm", &val))
++		priv->drive_impedance = convert_drive_impedance_ohm(pdev, val);
++
+ 	generic_phy = devm_phy_create(dev, np, &ops);
+ 	if (IS_ERR(generic_phy)) {
+ 		dev_err(dev, "failed to create PHY\n");

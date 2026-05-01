@@ -1,0 +1,67 @@
+From: Daniel Golle <daniel@makrotopia.org>
+Subject: [PATCH] serial: lantiq: keep UART alive in shutdown when port is console
+
+When the lantiq UART port is also serving as the kernel console,
+lqasc_shutdown() must not disable the controller or gate its clock.
+The TTY layer invokes uart_ops::shutdown when the last userspace FD
+referencing the port goes away (typically late during system shutdown,
+when init kills the getty / login shells holding /dev/console open).
+After this point the kernel still needs to be able to emit printk
+output via lqasc_console_write() - for the remainder of orderly
+reboot, and especially for panic and sysrq paths - which writes
+directly to LTQ_ASC_TBUF and polls LTQ_ASC_FSTAT for FIFO drain.
+Both depend on CON being enabled and the clock running.
+
+The current code unconditionally writes 0 to LTQ_ASC_CON and calls
+clk_disable_unprepare() on the UART clock. On platforms where init
+closes the last reference before reboot completes (e.g. procd's
+STATE_HALT path on OpenWrt), this kills the controller mid-shutdown:
+any subsequent userspace write to /dev/console blocks forever in
+uart_write() waiting for a FIFO that can no longer drain, and printk
+output via the console driver disappears too. The system stops
+making progress and never reaches reboot(2), even though the kernel
+is otherwise fine.
+
+Skip the controller-disable and clk_disable_unprepare() calls when
+uart_console(port) is true. The FIFO flushes (and free_irq) are kept
+unconditionally, matching the pattern used by other Linux serial
+drivers that share their UART with the kernel console (imx, atmel,
+xilinx_uartps, ...).
+
+Encountered while bringing up the MaxLinear URX/Lightning Mountain
+SoC, which uses drivers/tty/serial/lantiq.c with a single ASC port
+serving both ttyLTQ0 and the kernel console.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/drivers/tty/serial/lantiq.c
++++ b/drivers/tty/serial/lantiq.c
+@@ -370,17 +370,27 @@ lqasc_shutdown(struct uart_port *port)
+ {
+ 	struct ltq_uart_port *ltq_port = to_ltq_uart_port(port);
+ 	unsigned long flags;
++	bool is_console = uart_console(port);
+ 
+ 	ltq_port->soc->free_irq(port);
+ 
+ 	spin_lock_irqsave(&ltq_port->lock, flags);
+-	__raw_writel(0, port->membase + LTQ_ASC_CON);
++	/*
++	 * If this port is also serving as the kernel console, do not turn
++	 * the controller off or gate its clock. lqasc_console_write() needs
++	 * the hardware live (CON enabled, clock running) to flush printk
++	 * output during system shutdown / panic / sysrq, after the last TTY
++	 * user has closed and userspace stops referencing /dev/console.
++	 * Only flush the FIFOs.
++	 */
++	if (!is_console)
++		__raw_writel(0, port->membase + LTQ_ASC_CON);
+ 	asc_update_bits(ASCRXFCON_RXFEN, ASCRXFCON_RXFFLU,
+ 		port->membase + LTQ_ASC_RXFCON);
+ 	asc_update_bits(ASCTXFCON_TXFEN, ASCTXFCON_TXFFLU,
+ 		port->membase + LTQ_ASC_TXFCON);
+ 	spin_unlock_irqrestore(&ltq_port->lock, flags);
+-	if (!IS_ERR(ltq_port->clk))
++	if (!is_console && !IS_ERR(ltq_port->clk))
+ 		clk_disable_unprepare(ltq_port->clk);
+ }
+ 

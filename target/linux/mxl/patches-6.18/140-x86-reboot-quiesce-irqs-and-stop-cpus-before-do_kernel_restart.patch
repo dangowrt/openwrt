@@ -1,0 +1,63 @@
+From: Daniel Golle <daniel@makrotopia.org>
+Subject: [PATCH] x86/reboot: quiesce IRQs and stop CPUs before do_kernel_restart()
+
+Commit ae715818c5d7 ("x86/reboot: execute the kernel restart handler upon
+machine restart") added do_kernel_restart() to native_machine_restart() so
+that drivers registering a restart handler (e.g. a SoC reset controller)
+get a chance to reboot the system before falling through to legacy x86
+reboot methods.
+
+On platforms whose restart handler reaches its trigger through a single
+MMIO write, the bare call is fragile: with IRQs still enabled and other
+CPUs running, an interrupt or cross-call can preempt the handler between
+the write and the actual reset, the handler returns without effect, and
+the system falls through to __machine_emergency_restart(). On hardware
+without a working ACPI / KBD / BIOS / EFI reboot path that means a hang.
+
+Wrap the call in a small native_kernel_reboot() helper that pins the
+current CPU, halts the others and masks IRQs before invoking
+do_kernel_restart(). The helper still forwards @command, so platforms
+that act on it (Android-style reboot reasons, vendor recovery modes)
+keep working.
+
+Use the same helper from native_machine_emergency_restart() so panic
+and sysrq-b also reach the restart handler chain instead of going
+straight to legacy methods, with @command set to NULL since the
+emergency entry point does not carry one.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/arch/x86/kernel/reboot.c
++++ b/arch/x86/kernel/reboot.c
+@@ -606,6 +606,14 @@ void __attribute__((weak)) mach_reboot_f
+ {
+ }
+ 
++static void native_kernel_reboot(char *command)
++{
++	preempt_disable();
++	stop_other_cpus();
++	local_irq_disable();
++	do_kernel_restart(command);
++}
++
+ /*
+  * To the best of our knowledge Windows compatible x86 hardware expects
+  * the following on reboot:
+@@ -635,6 +643,8 @@ static void native_machine_emergency_res
+ 	if (reboot_emergency)
+ 		emergency_reboot_disable_virtualization();
+ 
++	native_kernel_reboot(NULL);
++
+ 	tboot_shutdown(TB_SHUTDOWN_REBOOT);
+ 
+ 	/* Tell the BIOS if we want cold or warm reboot */
+@@ -779,7 +789,7 @@ static void native_machine_restart(char
+ 	if (!reboot_force)
+ 		machine_shutdown();
+ 
+-	do_kernel_restart(command);
++	native_kernel_reboot(command);
+ 
+ 	__machine_emergency_restart(0);
+ }

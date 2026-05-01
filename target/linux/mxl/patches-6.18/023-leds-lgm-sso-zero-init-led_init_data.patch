@@ -1,0 +1,25 @@
+From: Daniel Golle <daniel@makrotopia.org>
+Subject: [PATCH] leds: lgm-sso: zero-initialize struct led_init_data
+
+sso_create_led() declares struct led_init_data on the stack and only
+fills in fwnode, devicename and default_label, leaving devname_mandatory
+(and any other future field) as uninitialized stack garbage. That's
+flagged by UBSAN at every LED registration:
+
+  UBSAN: invalid-load in drivers/leds/led-class.c:494:16
+  load of value 16 is not a valid value for type '_Bool'
+
+Zero-initialize the struct so all bool/numeric fields default to 0/false.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/drivers/leds/blink/leds-lgm-sso.c
++++ b/drivers/leds/blink/leds-lgm-sso.c
+@@ -349,7 +349,7 @@ static int sso_create_led(struct sso_led
+ 			  struct fwnode_handle *child)
+ {
+ 	struct sso_led_desc *desc = &led->desc;
+-	struct led_init_data init_data;
++	struct led_init_data init_data = {};
+ 	int err;
+ 
+ 	init_data.fwnode = child;

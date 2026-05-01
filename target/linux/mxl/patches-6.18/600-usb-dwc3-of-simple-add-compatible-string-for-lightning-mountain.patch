@@ -1,0 +1,40 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Tue, 2 Dec 2025 08:58:48 +0100
+Subject: [PATCH] usb: dwc3: of-simple: Add compatible string for Lightning
+ Mountain
+
+Add compatible string to use this generic glue layer to support
+Intel / MaxLinear Lightning Mountain platform's dwc3 controller.
+
+Also update the list of supported SoC in the Kconfig help.
+
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ drivers/usb/dwc3/Kconfig          | 5 ++++-
+ drivers/usb/dwc3/dwc3-of-simple.c | 1 +
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+--- a/drivers/usb/dwc3/Kconfig
++++ b/drivers/usb/dwc3/Kconfig
+@@ -115,7 +115,10 @@ config USB_DWC3_OF_SIMPLE
+ 	default USB_DWC3
+ 	help
+ 	  Support USB2/3 functionality in simple SoC integrations.
+-	  Currently supports Xilinx and Qualcomm DWC USB3 IP.
++	  Currently supports Rockchip RK3399, Spreadtrum SC9860, Allwinner H6,
++	  HiSilicon Hi3670, Hi3798MV200, Intel Keem Bay and Intel / MaxLinear
++	  Lightning Mountain (LGM) DWC USB3 IP.
++
+ 	  Say 'Y' or 'M' if you have one such device.
+ 
+ config USB_DWC3_ST
+--- a/drivers/usb/dwc3/dwc3-of-simple.c
++++ b/drivers/usb/dwc3/dwc3-of-simple.c
+@@ -175,6 +175,7 @@ static const struct of_device_id of_dwc3
+ 	{ .compatible = "hisilicon,hi3670-dwc3" },
+ 	{ .compatible = "hisilicon,hi3798mv200-dwc3" },
+ 	{ .compatible = "intel,keembay-dwc3" },
++	{ .compatible = "intel,lgm-dwc3" },
+ 	{ /* Sentinel */ }
+ };
+ MODULE_DEVICE_TABLE(of, of_dwc3_simple_match);

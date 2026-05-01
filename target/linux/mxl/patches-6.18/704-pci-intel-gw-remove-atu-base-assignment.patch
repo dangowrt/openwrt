@@ -1,0 +1,38 @@
+From: Florian Eckert <fe@dev.tdt.de>
+Date: Fri, 19 Dec 2025 10:57:07 +0100
+Subject: [PATCH] PCI: intel-gw: Remove atu base assignment
+
+In the current implementation, only one PCIe bridge is recognised. This
+change removes the assignment of the ATU base address during host setup.
+Instead, the ATU base address is read from the device tree. To do this,
+the 'atu' range of the DTS entry must be changed for PCIe.
+
+Old DTS entry for PCIe:
+reg = <0xd1000000 0x1000>,
+	<0xd3000000 0x20000>,
+	<0xd0c41000.0x1000>;
+reg-names = "dbi", "config", "app";
+
+New DTS entry for PCIe
+reg = <0xd1000000 0x1000>,
+	<0xd10c0000 0x1000>,
+	<0xd3000000 0x20000>,
+	<0xd0c41000.0x1000>;
+reg-names = "dbi", "atu", "config", "app";
+
+Signed-off-by: Florian Eckert <fe@dev.tdt.de>
+---
+ drivers/pci/controller/dwc/pcie-intel-gw.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+--- a/drivers/pci/controller/dwc/pcie-intel-gw.c
++++ b/drivers/pci/controller/dwc/pcie-intel-gw.c
+@@ -311,8 +311,6 @@ static int intel_pcie_host_setup(struct
+ 		goto clk_err;
+ 	}
+ 
+-	pci->atu_base = pci->dbi_base + 0xC0000;
+-
+ 	ret = phy_init(pcie->phy);
+ 	if (ret)
+ 		goto phy_err;

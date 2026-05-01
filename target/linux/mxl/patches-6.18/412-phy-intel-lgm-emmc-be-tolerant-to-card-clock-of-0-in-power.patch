@@ -1,0 +1,62 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Mon, 15 Dec 2025 10:11:45 +0100
+Subject: [PATCH] phy: intel-lgm-emmc: Be tolerant to card clock of 0 in power
+ on
+
+It's possible that there are some reasons to turn the PHY on while the
+clock is 0. In this case we just won't wait for the DLL to lock.
+
+phy-intel-keembay-emmc and phy-rockchip-emmc drivers do the same.
+
+Note: this patch should help with suspend/resume where the system will
+try to turn the PHY back on when the clock is 0.
+
+Fixes: 922794238330 ("phy: intel-lgm-emmc: Add support for eMMC PHY")
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ drivers/phy/intel/phy-intel-lgm-emmc.c | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+--- a/drivers/phy/intel/phy-intel-lgm-emmc.c
++++ b/drivers/phy/intel/phy-intel-lgm-emmc.c
+@@ -68,6 +68,13 @@ static int intel_emmc_phy_power(struct p
+ 		return ret;
+ 	}
+ 
++	ret = regmap_update_bits(priv->syscfg, EMMC_PHYCTRL1_REG, ENDLL_MASK,
++				 ENDLL_SHIFT(0));
++	if (ret) {
++		dev_err(&phy->dev, "turn off the dll failed: %d\n", ret);
++		return ret;
++	}
++
+ 	/* Already finish power_off above */
+ 	if (!on_off)
+ 		return 0;
+@@ -77,7 +84,6 @@ static int intel_emmc_phy_power(struct p
+ 	if (quot > 4)
+ 		dev_warn(&phy->dev, "Unsupported rate: %lu\n", rate);
+ 	switch (quot) {
+-	case 0:
+ 	case 1:
+ 		freqsel = FRQSEL_50M;
+ 		break;
+@@ -138,6 +144,18 @@ static int intel_emmc_phy_power(struct p
+ 	}
+ 
+ 	/*
++	 * We turned on the DLL even though the rate was 0 because we the
++	 * clock might be turned on later.  ...but we can't wait for the DLL
++	 * to lock when the rate is 0 because it will never lock with no
++	 * input clock.
++	 *
++	 * Technically we should be checking the lock later when the clock
++	 * is turned on, but for now we won't.
++	 */
++	if (rate == 0)
++		return 0;
++
++	/*
+ 	 * After enabling analog DLL circuits docs say that we need 10.2 us if
+ 	 * our source clock is at 50 MHz and that lock time scales linearly
+ 	 * with clock speed.  If we are powering on the PHY and the card clock

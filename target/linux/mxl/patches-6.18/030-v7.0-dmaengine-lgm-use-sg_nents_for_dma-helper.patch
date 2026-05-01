@@ -1,0 +1,46 @@
+From f9b0274f53a2d464e71f37e8f4d0d0dc41321259 Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Thu, 8 Jan 2026 11:50:18 +0100
+Subject: [PATCH] dmaengine: lgm: use sg_nents_for_dma() helper
+
+Instead of open coded variant let's use recently introduced helper.
+
+Reviewed-by: Bjorn Andersson <andersson@kernel.org>
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/20260108105619.3513561-8-andriy.shevchenko@linux.intel.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/lgm/lgm-dma.c | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/dma/lgm/lgm-dma.c b/drivers/dma/lgm/lgm-dma.c
+index 8173c3f1075a..a7b9cf30f6ad 100644
+--- a/drivers/dma/lgm/lgm-dma.c
++++ b/drivers/dma/lgm/lgm-dma.c
+@@ -1164,8 +1164,8 @@ ldma_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
+ 	struct dw2_desc *hw_ds;
+ 	struct dw2_desc_sw *ds;
+ 	struct scatterlist *sg;
+-	int num = sglen, i;
+ 	dma_addr_t addr;
++	int num, i;
+ 
+ 	if (!sgl)
+ 		return NULL;
+@@ -1173,12 +1173,7 @@ ldma_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
+ 	if (d->ver > DMA_VER22)
+ 		return ldma_chan_desc_cfg(chan, sgl->dma_address, sglen);
+ 
+-	for_each_sg(sgl, sg, sglen, i) {
+-		avail = sg_dma_len(sg);
+-		if (avail > DMA_MAX_SIZE)
+-			num += DIV_ROUND_UP(avail, DMA_MAX_SIZE) - 1;
+-	}
+-
++	num = sg_nents_for_dma(sgl, sglen, DMA_MAX_SIZE);
+ 	ds = dma_alloc_desc_resource(num, c);
+ 	if (!ds)
+ 		return NULL;
+-- 
+2.54.0
+

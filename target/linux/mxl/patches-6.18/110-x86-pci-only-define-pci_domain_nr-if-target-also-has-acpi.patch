@@ -1,0 +1,54 @@
+From: Florian Eckert <fe@dev.tdt.de>
+Date: Fri, 19 Dec 2025 09:17:18 +0100
+Subject: [PATCH] x86/PCI: only define pci_domain_nr if target also has ACPI
+ enabled
+
+If the 'x86' target has 'PCI' then the config option 'CONFIG_PCI_DOMAINS'
+is set. That means on 'x86' target the 'pci_domain_nr()' is visible for
+the 'x86' target and the domain number can be read from sysdata. The
+sysdata struct is filled by 'ACPI' through the function
+'pci_acpi_scan_root()' during the scan. If an x86 system is used, this is
+the normal procedure.
+
+In my case, I am also using an 'x86' system, but the data for the
+'pci_domain_nr' are provided by a 'DTS' and not from 'ACPI'. For this to
+work, the 'CONFIG_PCI_DOMAINS_GENERIC' option must be enabled.
+
+By enabling the option, the function is declared twice. Once in
+'/include/linux/pci.h' and once in '/arch/x86/include/asm/pci.h' and
+therefore causes a compilation error.
+
+To fix this, the offended function in '/arch/x86/include/asm/pci.h' is
+only enabled, if also the config option 'CONFIG_ACPI' is set. This change
+makes it possible for 'x86' targets that do not have 'ACPI' but do have a
+'DTS' to also provide the pci domain number via the 'DTS'.
+
+Signed-off-by: Florian Eckert <fe@dev.tdt.de>
+---
+ arch/x86/include/asm/pci.h | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+--- a/arch/x86/include/asm/pci.h
++++ b/arch/x86/include/asm/pci.h
+@@ -39,17 +39,19 @@ static inline struct pci_sysdata *to_pci
+ 
+ #ifdef CONFIG_PCI
+ 
+-#ifdef CONFIG_PCI_DOMAINS
++#if IS_ENABLED(CONFIG_PCI_DOMAINS) && IS_ENABLED(CONFIG_ACPI)
+ static inline int pci_domain_nr(struct pci_bus *bus)
+ {
+ 	return to_pci_sysdata(bus)->domain;
+ }
++#endif /* CONFIG_PCI_DOMAINS && CONFIG_ACPI */
+ 
++#ifdef CONFIG_PCI_DOMAINS
+ static inline int pci_proc_domain(struct pci_bus *bus)
+ {
+ 	return pci_domain_nr(bus);
+ }
+-#endif
++#endif /* CONFIG_PCI_DOMAINS */
+ 
+ #ifdef CONFIG_PCI_MSI
+ static inline void *_pci_root_bus_fwnode(struct pci_bus *bus)

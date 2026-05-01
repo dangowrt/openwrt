@@ -1,0 +1,27 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Wed, 3 Dec 2025 10:19:53 +0100
+Subject: [PATCH] clk: mxl: Fix i2c0 clk gate entry flags
+
+The i2c0 bus is used for communication between the SoC and PMIC by the
+Power Management Unit (PMU), also called Energy Processing Unit (EPU).
+
+The clock must not be disabled, otherwise the system will crash. That's
+why we set the flag CLK_IGNORE_UNUSED.
+
+Fixes: d058fd9e8984 ("clk: intel: Add CGU clock driver for a new SoC")
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ drivers/clk/x86/clk-lgm.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/clk/x86/clk-lgm.c
++++ b/drivers/clk/x86/clk-lgm.c
+@@ -306,7 +306,7 @@ static const struct lgm_clk_branch lgm_b
+ 		 G_EBU_SHIFT, 0, 0),
+ 	LGM_GATE(LGM_GCLK_PWM, "g_pwm", NULL, 0, CGU_GATE1,
+ 		 G_PWM_SHIFT, 0, 0),
+-	LGM_GATE(LGM_GCLK_I2C0, "g_i2c0", NULL, 0, CGU_GATE1,
++	LGM_GATE(LGM_GCLK_I2C0, "g_i2c0", NULL, CLK_IGNORE_UNUSED, CGU_GATE1,
+ 		 G_I2C0_SHIFT, 0, 0),
+ 	LGM_GATE(LGM_GCLK_I2C1, "g_i2c1", NULL, 0, CGU_GATE1,
+ 		 G_I2C1_SHIFT, 0, 0),

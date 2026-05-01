@@ -1,0 +1,47 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Fri, 28 Nov 2025 14:31:42 +0100
+Subject: [PATCH] x86/cpu/intel: Add EIST workaround for Lightning Mountain
+
+Add a workaround for Intel / MaxLinear Lightning Mountain to enable
+Enhanced Intel SpeedStep Technology (EIST) for each cpu. Otherwise, the
+frequency on some cpus is locked to the minimum value of 624 MHz.
+This usually would be the job of the BIOS / bootloader, but U-Boot only
+enables it on the cpu on which it is running.
+
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ arch/x86/kernel/cpu/intel.c | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+--- a/arch/x86/kernel/cpu/intel.c
++++ b/arch/x86/kernel/cpu/intel.c
+@@ -466,6 +466,29 @@ static void intel_workarounds(struct cpu
+ #else
+ static void intel_workarounds(struct cpuinfo_x86 *c)
+ {
++	u64 misc_enable;
++
++	/*
++	 * Intel / MaxLinear Lightning Mountain workaround to enable Enhanced
++	 * Intel SpeedStep Technology (EIST) for each cpu. Otherwise, the
++	 * frequency on some cpus is locked to the minimum value of 624 MHz.
++	 * This usually would be the job of the BIOS / bootloader, but U-Boot
++	 * only enables it on the cpu on which it is running.
++	 */
++	if (c->x86_vfm == INTEL_ATOM_AIRMONT_NP) {
++		rdmsrl(MSR_IA32_MISC_ENABLE, misc_enable);
++		if (!(misc_enable & MSR_IA32_MISC_ENABLE_ENHANCED_SPEEDSTEP)) {
++			misc_enable |= MSR_IA32_MISC_ENABLE_ENHANCED_SPEEDSTEP;
++			wrmsrl(MSR_IA32_MISC_ENABLE, misc_enable);
++
++			/* check to see if it was enabled successfully */
++			rdmsrl(MSR_IA32_MISC_ENABLE, misc_enable);
++			if (!(misc_enable & MSR_IA32_MISC_ENABLE_ENHANCED_SPEEDSTEP)) {
++				pr_info("CPU%d: Can't enable Enhanced SpeedStep\n",
++					c->cpu_index);
++			}
++		}
++	}
+ }
+ #endif
+ 

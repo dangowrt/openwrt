@@ -1,0 +1,23 @@
+leds: lgm-sso: default to falling-edge data clock to match vendor
+
+The vendor's split sso-gpio driver defaults RZFL=1 (falling-edge data
+clock) and only switches to rising-edge when intel,sso-rising is set
+in the DT. Mainline hard-codes DATA_CLK_EDGE=0 (rising) so on boards
+whose external shift register is wired for the vendor default, the
+data clocked out doesn't latch and writes to SSO_CPU never appear at
+the LED outputs.
+
+Match the vendor default by setting DATA_CLK_EDGE=1.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/drivers/leds/blink/leds-lgm-sso.c
++++ b/drivers/leds/blink/leds-lgm-sso.c
+@@ -52,7 +52,7 @@
+ #define MAX_FREQ_RANK			10
+ #define DEF_GPTC_CLK_RATE		200000000
+ #define SSO_DEF_BRIGHTNESS		LED_HALF
+-#define DATA_CLK_EDGE			0 /* 0-rising, 1-falling */
++#define DATA_CLK_EDGE			1 /* 0-rising, 1-falling */
+ 
+ static const u32 freq_div_tbl[] = {4000, 2000, 1000, 800};
+ static const int freq_tbl[] = {2, 4, 8, 10, 50000, 100000, 200000, 250000};

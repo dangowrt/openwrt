@@ -1,0 +1,40 @@
+From: Florian Eckert <fe@dev.tdt.de>
+Date: Fri, 19 Dec 2025 08:04:28 +0100
+Subject: [PATCH] phy: intel: phy-intel-lgm-combo: Log combophy mode
+
+The intel combo PHY can be configured in different modes via the
+devicetree. Therefore, it makes sense to output this during bootup.
+
+Signed-off-by: Florian Eckert <fe@dev.tdt.de>
+---
+ drivers/phy/intel/phy-intel-lgm-combo.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/drivers/phy/intel/phy-intel-lgm-combo.c
++++ b/drivers/phy/intel/phy-intel-lgm-combo.c
+@@ -69,6 +69,15 @@ enum intel_combo_mode {
+ 	SATA0_SATA1_MODE,
+ };
+ 
++static const char * const cbphy_mode_names[] = {
++	"PCIe single lane mode",
++	"PCIe Dual lane mode",
++	"RXAUI mode",
++	"XFI single lane mode",
++	"SATA single lane mode",
++	"PHY mode not supported"
++};
++
+ enum aggregated_mode {
+ 	PHY_SL_MODE,
+ 	PHY_DL_MODE,
+@@ -232,6 +241,9 @@ static int intel_cbphy_set_mode(struct i
+ 	if (ret)
+ 		dev_err(dev, "Failed to set ComboPhy mode: %d\n", ret);
+ 
++	dev_info(dev, "Set combo mode: combophy[%d]: mode: %s\n",
++		cbphy->id, cbphy_mode_names[cb_mode]);
++
+ 	return ret;
+ }
+ 

@@ -1,0 +1,94 @@
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Wed, 30 Apr 2026 02:00:00 +0200
+Subject: [PATCH] x86/devicetree: append /chosen/bootargs to boot_command_line
+
+Mainline x86 takes the kernel command line from boot_params and ignores
+/chosen/bootargs from a DTB passed via SETUP_DTB. Append it after the
+bootloader-supplied cmdline in setup_arch(), between parse_setup_data()
+and parse_early_param(), so DT-supplied options win for any duplicate
+keys via the cmdline parser's last-occurrence semantics.
+
+Used by the LGM/URX target to pin a `mem=` cap that reflects the SoC's
+4 GiB physical addressing limit, regardless of what the U-Boot env
+provides.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/arch/x86/include/asm/prom.h
++++ b/arch/x86/include/asm/prom.h
+@@ -24,10 +24,12 @@ extern u64 initial_dtb;
+ extern void add_dtb(u64 data);
+ void x86_of_pci_init(void);
+ void x86_flattree_get_config(void);
++void x86_dtb_append_chosen_bootargs(char *buf, size_t buf_size);
+ #else
+ static inline void add_dtb(u64 data) { }
+ static inline void x86_of_pci_init(void) { }
+ static inline void x86_flattree_get_config(void) { }
++static inline void x86_dtb_append_chosen_bootargs(char *buf, size_t buf_size) { }
+ #define of_ioapic 0
+ #endif
+ 
+--- a/arch/x86/kernel/devicetree.c
++++ b/arch/x86/kernel/devicetree.c
+@@ -38,6 +38,49 @@ void __init add_dtb(u64 data)
+ 	initial_dtb = data + offsetof(struct setup_data, data);
+ }
+ 
++/* Append /chosen/bootargs to @buf with a leading space. No-op without DTB. */
++void __init x86_dtb_append_chosen_bootargs(char *buf, size_t buf_size)
++{
++	void *dt;
++	u32 size, map_len;
++	int chosen, len;
++	const char *bootargs;
++
++	if (!initial_dtb || !buf || buf_size == 0)
++		return;
++
++	map_len = max(PAGE_SIZE - (initial_dtb & ~PAGE_MASK), (u64)128);
++	dt = early_memremap(initial_dtb, map_len);
++	if (!dt)
++		return;
++
++	if (fdt_check_header(dt))
++		goto out;
++
++	size = fdt_totalsize(dt);
++	if (size > map_len) {
++		early_memunmap(dt, map_len);
++		dt = early_memremap(initial_dtb, size);
++		if (!dt)
++			return;
++		map_len = size;
++	}
++
++	chosen = fdt_path_offset(dt, "/chosen");
++	if (chosen < 0)
++		goto out;
++
++	bootargs = fdt_getprop(dt, chosen, "bootargs", &len);
++	if (!bootargs || len <= 1)
++		goto out;
++
++	strlcat(buf, " ", buf_size);
++	strlcat(buf, bootargs, buf_size);
++
++out:
++	early_memunmap(dt, map_len);
++}
++
+ /*
+  * CE4100 ids. Will be moved to machine_device_initcall() once we have it.
+  */
+--- a/arch/x86/kernel/setup.c
++++ b/arch/x86/kernel/setup.c
+@@ -965,6 +965,9 @@ void __init setup_arch(char **cmdline_p)
+ 	e820__memory_setup();
+ 	parse_setup_data();
+ 
++	x86_dtb_append_chosen_bootargs(boot_command_line, COMMAND_LINE_SIZE);
++	strscpy(command_line, boot_command_line, COMMAND_LINE_SIZE);
++
+ 	copy_edd();
+ 
+ 	setup_initial_init_mm(_text, _etext, _edata, (void *)_brk_end);

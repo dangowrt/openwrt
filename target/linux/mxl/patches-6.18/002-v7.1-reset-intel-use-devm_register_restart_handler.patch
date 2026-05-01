@@ -1,0 +1,52 @@
+From 8bfef0c2438978d4e246f239b3e5dcd0ab9df07d Mon Sep 17 00:00:00 2001
+From: Andrew Davis <afd@ti.com>
+Date: Wed, 13 Aug 2025 16:41:34 -0500
+Subject: [PATCH] reset: intel: Use devm_register_restart_handler()
+
+Function register_restart_handler() is deprecated. Using this new API
+removes our need to keep and manage a struct notifier_block and to
+later unregister the handler.
+
+Signed-off-by: Andrew Davis <afd@ti.com>
+Reviewed-by: Philipp Zabel <p.zabel@pengutronix.de>
+Signed-off-by: Philipp Zabel <p.zabel@pengutronix.de>
+---
+ drivers/reset/reset-intel-gw.c | 11 +++--------
+ 1 file changed, 3 insertions(+), 8 deletions(-)
+
+--- a/drivers/reset/reset-intel-gw.c
++++ b/drivers/reset/reset-intel-gw.c
+@@ -28,7 +28,6 @@ struct intel_reset_soc {
+ 
+ struct intel_reset_data {
+ 	struct reset_controller_dev rcdev;
+-	struct notifier_block restart_nb;
+ 	const struct intel_reset_soc *soc_data;
+ 	struct regmap *regmap;
+ 	struct device *dev;
+@@ -153,12 +152,10 @@ static int intel_reset_xlate(struct rese
+ 	return id;
+ }
+ 
+-static int intel_reset_restart_handler(struct notifier_block *nb,
+-				       unsigned long action, void *data)
++static int intel_reset_restart_handler(struct sys_off_data *data)
+ {
+-	struct intel_reset_data *reset_data;
++	struct intel_reset_data *reset_data = data->cb_data;
+ 
+-	reset_data = container_of(nb, struct intel_reset_data, restart_nb);
+ 	intel_assert_device(&reset_data->rcdev, reset_data->reboot_id);
+ 
+ 	return NOTIFY_DONE;
+@@ -215,9 +212,7 @@ static int intel_reset_probe(struct plat
+ 	if (data->soc_data->legacy)
+ 		data->reboot_id |= FIELD_PREP(STAT_BIT_OFFSET_MASK, rb_id[2]);
+ 
+-	data->restart_nb.notifier_call =	intel_reset_restart_handler;
+-	data->restart_nb.priority =		128;
+-	register_restart_handler(&data->restart_nb);
++	devm_register_restart_handler(&pdev->dev, intel_reset_restart_handler, data);
+ 
+ 	return 0;
+ }

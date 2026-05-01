@@ -1,0 +1,59 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Tue, 2 Dec 2025 10:27:16 +0100
+Subject: [PATCH] Revert "clk: mxl: Add option to override gate clks"
+
+Revert commit a5d49bd369b8 ("clk: mxl: Add option to override gate
+clks").
+
+There was added a flag to select if a clock gate should be controlled by
+the CGU clk driver or directly by the PMU / EPU and the default behavior
+was changed to "controlled by EPU". But this defacto broke / disabled
+the clock gate handling. As long as there is no driver for the EPU, this
+flag is useless and we want to control the clock gates by the clk
+driver.
+
+Fixes: a5d49bd369b8 ("clk: mxl: Add option to override gate clks")
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ drivers/clk/x86/clk-cgu.c | 16 +---------------
+ drivers/clk/x86/clk-cgu.h |  3 +--
+ 2 files changed, 2 insertions(+), 17 deletions(-)
+
+--- a/drivers/clk/x86/clk-cgu.c
++++ b/drivers/clk/x86/clk-cgu.c
+@@ -354,22 +354,8 @@ int lgm_clk_register_branches(struct lgm
+ 			hw = lgm_clk_register_fixed_factor(ctx, list);
+ 			break;
+ 		case CLK_TYPE_GATE:
+-			if (list->gate_flags & GATE_CLK_HW) {
+-				hw = lgm_clk_register_gate(ctx, list);
+-			} else {
+-				/*
+-				 * GATE_CLKs can be controlled either from
+-				 * CGU clk driver i.e. this driver or directly
+-				 * from power management driver/daemon. It is
+-				 * dependent on the power policy/profile requirements
+-				 * of the end product. To override control of gate
+-				 * clks from this driver, provide NULL for this index
+-				 * of gate clk provider.
+-				 */
+-				hw = NULL;
+-			}
++			hw = lgm_clk_register_gate(ctx, list);
+ 			break;
+-
+ 		default:
+ 			dev_err(ctx->dev, "invalid clk type\n");
+ 			return -EINVAL;
+--- a/drivers/clk/x86/clk-cgu.h
++++ b/drivers/clk/x86/clk-cgu.h
+@@ -197,8 +197,7 @@ struct lgm_clk_branch {
+ /* clock flags definition */
+ #define CLOCK_FLAG_VAL_INIT	BIT(16)
+ #define MUX_CLK_SW		BIT(17)
+-#define GATE_CLK_HW		BIT(18)
+-#define DIV_CLK_NO_MASK		BIT(19)
++#define DIV_CLK_NO_MASK		BIT(18)
+ 
+ #define LGM_MUX(_id, _name, _pdata, _f, _reg,		\
+ 		_shift, _width, _cf, _v)		\

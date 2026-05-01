@@ -1,0 +1,23 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Tue, 2 Dec 2025 09:48:07 +0100
+Subject: [PATCH] clk: mxl: Fix CGU_GATE3 value
+
+Set the correct address for CGU_GATE3. This fixes a copy&paste issue.
+
+Fixes: d058fd9e8984 ("clk: intel: Add CGU clock driver for a new SoC")
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ drivers/clk/x86/clk-lgm.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/clk/x86/clk-lgm.c
++++ b/drivers/clk/x86/clk-lgm.c
+@@ -109,7 +109,7 @@
+ #define CGU_GATE0		0x300
+ #define CGU_GATE1		0x310
+ #define CGU_GATE2		0x320
+-#define CGU_GATE3		0x310
++#define CGU_GATE3		0x330
+ 
+ #define PLL_DIV(x)		((x) + 0x04)
+ #define PLL_SSC(x)		((x) + 0x10)

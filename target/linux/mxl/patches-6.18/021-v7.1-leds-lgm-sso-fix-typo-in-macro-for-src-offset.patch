@@ -1,0 +1,25 @@
+From 0e2287999f0432b51a54c235db660789ca657f53 Mon Sep 17 00:00:00 2001
+From: Lukas Kraft <rebootrequired42@gmail.com>
+Date: Thu, 12 Mar 2026 22:09:52 +0100
+Subject: [PATCH] leds: lgm-sso: Fix typo in macro for src offset
+
+Replace unused argument pinc with used argument pin.
+
+Signed-off-by: Lukas Kraft <rebootrequired42@gmail.com>
+Link: https://patch.msgid.link/20260312210958.48467-1-rebootrequired42@gmail.com
+Signed-off-by: Lee Jones <lee@kernel.org>
+---
+ drivers/leds/blink/leds-lgm-sso.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/leds/blink/leds-lgm-sso.c
++++ b/drivers/leds/blink/leds-lgm-sso.c
+@@ -25,7 +25,7 @@
+ #define LED_BLINK_H8_0			0x0
+ #define LED_BLINK_H8_1			0x4
+ #define GET_FREQ_OFFSET(pin, src)	(((pin) * 6) + ((src) * 2))
+-#define GET_SRC_OFFSET(pinc)		(((pin) * 6) + 4)
++#define GET_SRC_OFFSET(pin) 		(((pin) * 6) + 4)
+ 
+ #define DUTY_CYCLE(x)			(0x8 + ((x) * 4))
+ #define SSO_CON0			0x2B0

@@ -1,0 +1,71 @@
+From 80c70bfb95cdbe0c644070f4ca4754a60f0a4830 Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Thu, 8 Jan 2026 11:50:12 +0100
+Subject: [PATCH] scatterlist: introduce sg_nents_for_dma() helper
+
+Sometimes the user needs to split each entry on the mapped scatter list
+due to DMA length constrains. This helper returns a number of entities
+assuming that each of them is not bigger than supplied maximum length.
+
+Reviewed-by: Bjorn Andersson <andersson@kernel.org>
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/20260108105619.3513561-2-andriy.shevchenko@linux.intel.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ include/linux/scatterlist.h |  2 ++
+ lib/scatterlist.c           | 26 ++++++++++++++++++++++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/include/linux/scatterlist.h b/include/linux/scatterlist.h
+index 29f6ceb98d74..6de1a2434299 100644
+--- a/include/linux/scatterlist.h
++++ b/include/linux/scatterlist.h
+@@ -441,6 +441,8 @@ static inline void sg_init_marker(struct scatterlist *sgl,
+ 
+ int sg_nents(struct scatterlist *sg);
+ int sg_nents_for_len(struct scatterlist *sg, u64 len);
++int sg_nents_for_dma(struct scatterlist *sgl, unsigned int sglen, size_t len);
++
+ struct scatterlist *sg_last(struct scatterlist *s, unsigned int);
+ void sg_init_table(struct scatterlist *, unsigned int);
+ void sg_init_one(struct scatterlist *, const void *, unsigned int);
+diff --git a/lib/scatterlist.c b/lib/scatterlist.c
+index 4af1c8b0775a..21bc9c1f7c06 100644
+--- a/lib/scatterlist.c
++++ b/lib/scatterlist.c
+@@ -64,6 +64,32 @@ int sg_nents_for_len(struct scatterlist *sg, u64 len)
+ }
+ EXPORT_SYMBOL(sg_nents_for_len);
+ 
++/**
++ * sg_nents_for_dma - return the count of DMA-capable entries in scatterlist
++ * @sgl:	The scatterlist
++ * @sglen:	The current number of entries
++ * @len:	The maximum length of DMA-capable block
++ *
++ * Description:
++ * Determines the number of entries in @sgl which would be permitted in
++ * DMA-capable transfer if list had been split accordingly, taking into
++ * account chaining as well.
++ *
++ * Returns:
++ *   the number of sgl entries needed
++ *
++ **/
++int sg_nents_for_dma(struct scatterlist *sgl, unsigned int sglen, size_t len)
++{
++	struct scatterlist *sg;
++	int i, nents = 0;
++
++	for_each_sg(sgl, sg, sglen, i)
++		nents += DIV_ROUND_UP(sg_dma_len(sg), len);
++	return nents;
++}
++EXPORT_SYMBOL(sg_nents_for_dma);
++
+ /**
+  * sg_last - return the last scatterlist entry in a list
+  * @sgl:	First entry in the scatterlist
+-- 
+2.54.0
+

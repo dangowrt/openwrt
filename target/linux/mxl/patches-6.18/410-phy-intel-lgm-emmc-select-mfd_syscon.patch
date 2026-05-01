@@ -1,0 +1,23 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Tue, 16 Dec 2025 14:35:28 +0100
+Subject: [PATCH] phy: intel-lgm-emmc: select MFD_SYSCON
+
+The phy-intel-lgm-emmc driver relies on MFD_SYSCON functionality to
+access the phy registers. Select MFD_SYSCON from PHY_INTEL_LGM_EMMC to
+ensure that it's enabled.
+
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ drivers/phy/intel/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/phy/intel/Kconfig
++++ b/drivers/phy/intel/Kconfig
+@@ -43,6 +43,7 @@ config PHY_INTEL_LGM_COMBO
+ config PHY_INTEL_LGM_EMMC
+ 	tristate "Intel Lightning Mountain EMMC PHY driver"
+ 	depends on X86 || COMPILE_TEST
++	select MFD_SYSCON
+ 	select GENERIC_PHY
+ 	help
+ 	  Enable this to support the Intel EMMC PHY

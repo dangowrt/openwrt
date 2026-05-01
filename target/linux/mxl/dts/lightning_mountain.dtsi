@@ -1,0 +1,831 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/*
+ * Common SoC device tree for the MaxLinear Lightning Mountain (LGM)
+ * x86_64 gateway SoC family.
+ */
+
+#include <dt-bindings/clock/intel,lgm-clk.h>
+#include <dt-bindings/phy/phy.h>
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	compatible = "mxl,lgm", "intel,lgm";
+
+	chosen {
+		stdout-path = "serial0";
+
+		/* SoC bus limit; vendor U-Boot's e820 has a phantom region above. */
+		bootargs = "mem=4G";
+	};
+
+	aliases {
+		serial0 = &asc0;
+		pcie0 = &pcie0;
+		pcie1 = &pcie1;
+		pcie2 = &pcie2;
+		pcie3 = &pcie3;
+		pcie4 = &pcie4;
+		pcie5 = &pcie5;
+		pcie6 = &pcie6;
+		pcie7 = &pcie7;
+	};
+
+	/* SoC's 4 GiB bus window, split because root has #size-cells = <1>. */
+	memory@0 {
+		device_type = "memory";
+		reg = <0x00000000 0x80000000>,
+		      <0x80000000 0x80000000>;
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			device_type = "cpu";
+			compatible = "intel,lgm";
+			reg = <0>;
+		};
+
+		cpu1: cpu@2 {
+			device_type = "cpu";
+			compatible = "intel,lgm";
+			reg = <2>;
+		};
+
+		cpu2: cpu@8 {
+			device_type = "cpu";
+			compatible = "intel,lgm";
+			reg = <8>;
+		};
+
+		cpu3: cpu@a {
+			device_type = "cpu";
+			compatible = "intel,lgm";
+			reg = <0xa>;
+		};
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/*
+		 * Vendor U-Boot reads `size` from this node and appends a
+		 * cma=<size>@<start> argument to the kernel cmdline...
+		 */
+		linux_cma: linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			alignment = <0x200000>;
+			size = <0x10000000>;	/* 256 MiB */
+			linux,cma-default;
+		};
+	};
+
+	core: core {
+		compatible = "intel,core", "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		ioapic1: interrupt-controller@fec00000 {
+			compatible = "intel,ce4100-ioapic";
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			#address-cells = <0>;
+			reg = <0xfec00000 0x1000>;
+			nr_entries = <256>;
+		};
+
+		hpet: timer@fed00000 {
+			compatible = "intel,ce4100-hpet";
+			reg = <0xfed00000 0x400>;
+		};
+
+		lapic0: interrupt-controller@fee00000 {
+			compatible = "intel,ce4100-lapic";
+			reg = <0xfee00000 0x1000>;
+			/* No 8259 on this SoC. */
+			intel,virtual-wire-mode;
+		};
+	};
+
+	soc: soc {
+		compatible = "intel,soc", "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		rcu0: reset-controller@e0000000 {
+			compatible = "intel,rcu-lgm";
+			reg = <0xe0000000 0x20000>;
+			intel,global-reset = <0x10 30>;
+			#reset-cells = <2>;
+		};
+
+		cgu0: clock-controller@e0200000 {
+			/* clk-lgm uses syscon_node_to_regmap(). */
+			compatible = "intel,cgu-lgm", "syscon";
+			reg = <0xe0200000 0x33c>;
+			#clock-cells = <1>;
+		};
+
+		afeclk: clock-afe {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <8000>;
+			clock-output-names = "afeclk";
+		};
+
+		chiptop: syscon@e0020000 {
+			compatible = "mxl,chiptop-lgm", "syscon";
+			reg = <0xe0020000 0x1000>;
+		};
+
+		hsio0: syscon@e0080000 {
+			compatible = "intel,hsio-lgm", "syscon";
+			reg = <0xe0080000 0x330>;
+		};
+
+		hsio1: syscon@e00a0000 {
+			compatible = "intel,hsio-lgm", "syscon";
+			reg = <0xe00a0000 0x330>;
+		};
+
+		pinctrl: pinctrl@e2880000 {
+			compatible = "intel,lgm-io";
+			reg = <0xe2880000 0x100000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			#pinctrl-cells = <2>;
+			ranges;
+
+			gpio0: gpio@e2800000 {
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0xe2800000 0x80>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupt-parent = <&ioapic1>;
+				interrupts = <135 1>;
+				gpio-ranges = <&pinctrl 0 0 32>;
+			};
+
+			gpio1: gpio@e2800100 {
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0xe2800100 0x80>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupt-parent = <&ioapic1>;
+				interrupts = <136 1>;
+				gpio-ranges = <&pinctrl 0 32 32>;
+			};
+
+			gpio2: gpio@e2800200 {
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0xe2800200 0x80>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupt-parent = <&ioapic1>;
+				interrupts = <137 1>;
+				gpio-ranges = <&pinctrl 0 64 32>;
+			};
+
+			gpio3: gpio@e2800300 {
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0xe2800300 0x80>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupt-parent = <&ioapic1>;
+				interrupts = <138 1>;
+				gpio-ranges = <&pinctrl 0 96 8>;
+			};
+		};
+
+		asc0: serial@e0a00000 {
+			compatible = "intel,lgm-asc";
+			reg = <0xe0a00000 0x1000>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <128 1>;
+			interrupt-names = "asc_irq";
+			clocks = <&cgu0 LGM_CLK_NOC4>, <&cgu0 LGM_GCLK_ASC0>;
+			clock-names = "freq", "asc";
+		};
+
+		emmc: mmc@ec700000 {
+			compatible = "intel,lgm-sdhci-5.1-emmc",
+				     "arasan,sdhci-5.1";
+			reg = <0xec700000 0x300>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <44 1>;
+			clocks = <&cgu0 LGM_CLK_EMMC>, <&cgu0 LGM_GCLK_EMMC>;
+			clock-names = "clk_xin", "clk_ahb";
+			clock-output-names = "emmc_cardclock", "emmc_sampleclock";
+			#clock-cells = <1>;
+			arasan,soc-ctl-syscon = <&chiptop>;
+			phys = <&emmc_phy>;
+			phy-names = "phy_arasan";
+			dma-coherent;
+			clk-phase-mmc-hs200 = <0 0xb4>;
+			clk-phase-mmc-hs400 = <0 0x5a>;
+			bus-width = <8>;
+			non-removable;
+			no-mmc-hs400;
+			status = "disabled";
+		};
+
+		sdxc: mmc@ec600000 {
+			compatible = "intel,lgm-sdhci-5.1-sdxc",
+				     "arasan,sdhci-5.1";
+			reg = <0xec600000 0x300>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <43 1>;
+			clocks = <&cgu0 LGM_CLK_SDXC>, <&cgu0 LGM_GCLK_SDXC>;
+			clock-names = "clk_xin", "clk_ahb";
+			clock-output-names = "sdxc_cardclock", "sdxc_sampleclock";
+			#clock-cells = <1>;
+			arasan,soc-ctl-syscon = <&chiptop>;
+			dma-coherent;
+			clk-phase-sd-hs = <0 0xb4>;
+			clk-phase-uhs-sdr50 = <0 0xb4>;
+			clk-phase-uhs-sdr104 = <0 0xb4>;
+			status = "disabled";
+		};
+
+		emmc_phy: emmc-phy {
+			compatible = "intel,lgm-emmc-phy";
+			intel,syscon = <&chiptop>;
+			clocks = <&emmc 0>;
+			clock-names = "emmcclk";
+			#phy-cells = <0>;
+		};
+
+		/*
+		 * I2C bus 0 (i2c@e0500000) gated by an EPU-firmware semaphore;
+		 * no upstream driver — leave the PMIC to U-Boot/intel_pstate.
+		 */
+		i2c1: i2c@e1300000 {
+			compatible = "snps,designware-i2c";
+			reg = <0xe1300000 0x100>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <73 1>;
+			clocks = <&cgu0 LGM_CLK_NOC4>;
+			clock-names = "ref";
+			clock-frequency = <100000>;
+			i2c-sda-hold-time-ns = <500>;
+			resets = <&rcu0 0x30 0x09>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		i2c2: i2c@e1f00000 {
+			compatible = "snps,designware-i2c";
+			reg = <0xe1f00000 0x100>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <74 1>;
+			clocks = <&cgu0 LGM_CLK_NOC4>;
+			clock-names = "ref";
+			clock-frequency = <100000>;
+			i2c-sda-hold-time-ns = <500>;
+			resets = <&rcu0 0x30 0x0a>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		i2c3: i2c@e2000000 {
+			compatible = "snps,designware-i2c";
+			reg = <0xe2000000 0x100>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <75 1>;
+			clocks = <&cgu0 LGM_CLK_NOC4>;
+			clock-names = "ref";
+			clock-frequency = <100000>;
+			i2c-sda-hold-time-ns = <500>;
+			resets = <&rcu0 0x30 0x0b>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		usb_phy0: usb-phy@e7e00000 {
+			compatible = "intel,lgm-usb-phy";
+			reg = <0xe7e00000 0x10000>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <46 1>;
+			resets = <&rcu0 0x70 0x16>,
+				 <&rcu0 0x70 0x1a>,
+				 <&rcu0 0x70 0x18>,
+				 <&rcu0 0x70 0x1c>;
+			reset-names = "ctrl", "apb", "phy", "phy31";
+			#phy-cells = <0>;
+			status = "disabled";
+		};
+
+		usb0: usb@0 {
+			compatible = "intel,lgm-dwc3";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges;
+			dma-coherent;
+			clocks = <&cgu0 LGM_GCLK_USB1>;
+			status = "disabled";
+
+			dwc3@e7d00000 {
+				compatible = "snps,dwc3";
+				reg = <0xe7d00000 0x10000>;
+				interrupt-parent = <&ioapic1>;
+				interrupts = <47 1>;
+				dr_mode = "host";
+				usb-phy = <&usb_phy0>;
+			};
+		};
+
+		usb_phy1: usb-phy@e6f00000 {
+			compatible = "intel,lgm-usb-phy";
+			reg = <0xe6f00000 0x10000>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <48 1>;
+			resets = <&rcu0 0x70 0x17>,
+				 <&rcu0 0x70 0x1b>,
+				 <&rcu0 0x70 0x19>,
+				 <&rcu0 0x70 0x1d>;
+			reset-names = "ctrl", "apb", "phy", "phy31";
+			#phy-cells = <0>;
+			status = "disabled";
+		};
+
+		usb1: usb@1 {
+			compatible = "intel,lgm-dwc3";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges;
+			dma-coherent;
+			clocks = <&cgu0 LGM_GCLK_USB2>;
+			status = "disabled";
+
+			dwc3@e6e00000 {
+				compatible = "snps,dwc3";
+				reg = <0xe6e00000 0x10000>;
+				interrupt-parent = <&ioapic1>;
+				interrupts = <49 1>;
+				dr_mode = "host";
+				usb-phy = <&usb_phy1>;
+			};
+		};
+
+		ssoled0: ssoled@e0d40000 {
+			compatible = "intel,lgm-ssoled", "syscon";
+			reg = <0xe0d40000 0x2e4>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <16>;
+			clocks = <&cgu0 LGM_GCLK_LEDC0>, <&afeclk>;
+			clock-names = "sso", "fpid";
+			resets = <&rcu0 0x30 0x16>;
+			intel,sso-update-rate-hz = <10>;
+			status = "disabled";
+		};
+
+		ssc0: spi@e0800000 {
+			compatible = "intel,lgm-spi";
+			reg = <0xe0800000 0x400>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <35 1>;
+			interrupt-names = "spi_irq";
+			clocks = <&cgu0 LGM_CLK_NOC4>, <&cgu0 LGM_GCLK_SSC0>;
+			clock-names = "freq", "gate";
+			num-cs = <3>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		ssc1: spi@e0900000 {
+			compatible = "intel,lgm-spi";
+			reg = <0xe0900000 0x400>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <115 1>;
+			interrupt-names = "spi_irq";
+			clocks = <&cgu0 LGM_CLK_NOC4>, <&cgu0 LGM_GCLK_SSC1>;
+			clock-names = "freq", "gate";
+			num-cs = <6>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		ssc2: spi@e1d00000 {
+			compatible = "intel,lgm-spi";
+			reg = <0xe1d00000 0x400>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <71 1>;
+			interrupt-names = "spi_irq";
+			clocks = <&cgu0 LGM_CLK_NOC4>, <&cgu0 LGM_GCLK_SSC2>;
+			clock-names = "freq", "gate";
+			num-cs = <3>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		ssc3: spi@e1e00000 {
+			compatible = "intel,lgm-spi";
+			reg = <0xe1e00000 0x400>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <72 1>;
+			interrupt-names = "spi_irq";
+			clocks = <&cgu0 LGM_CLK_NOC4>, <&cgu0 LGM_GCLK_SSC3>;
+			clock-names = "freq", "gate";
+			num-cs = <2>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		/*
+		 * Vendor DTS splits each combophy wrapper into two children
+		 * with separate cr/app MMIOs at +0x100000; mainline driver
+		 * accesses both lanes through one cr/app via CR_ADDR(lane*0x100).
+		 * Lane 1 may need rework if hardware really has separate MMIO.
+		 */
+		combophy0: combophy@d0a00000 {
+			compatible = "intel,combophy-lgm", "intel,combo-phy";
+			reg = <0xd0a00000 0x40000>, <0xd0a40000 0x1000>;
+			reg-names = "core", "app";
+			clocks = <&cgu0 LGM_CLK_CBPHY0>;
+			resets = <&rcu0 0x50 0x06>,
+				 <&rcu0 0x50 0x11>,
+				 <&rcu0 0x50 0x17>,
+				 <&rcu0 0x50 0x18>;
+			reset-names = "phy", "core", "iphy0", "iphy1";
+			intel,syscfg = <&chiptop 0>;
+			intel,hsio = <&hsio0 0>;
+			intel,phy-mode = <PHY_TYPE_PCIE>;
+			#phy-cells = <1>;
+			status = "disabled";
+		};
+
+		combophy1: combophy@d0c00000 {
+			compatible = "intel,combophy-lgm", "intel,combo-phy";
+			reg = <0xd0c00000 0x40000>, <0xd0c40000 0x1000>;
+			reg-names = "core", "app";
+			clocks = <&cgu0 LGM_CLK_CBPHY1>;
+			resets = <&rcu0 0x50 0x08>,
+				 <&rcu0 0x50 0x12>,
+				 <&rcu0 0x50 0x19>,
+				 <&rcu0 0x50 0x1a>;
+			reset-names = "phy", "core", "iphy0", "iphy1";
+			intel,syscfg = <&chiptop 1>;
+			intel,hsio = <&hsio0 1>;
+			intel,phy-mode = <PHY_TYPE_PCIE>;
+			#phy-cells = <1>;
+			status = "disabled";
+		};
+
+		combophy2: combophy@c0a00000 {
+			compatible = "intel,combophy-lgm", "intel,combo-phy";
+			reg = <0xc0a00000 0x40000>, <0xc0a40000 0x1000>;
+			reg-names = "core", "app";
+			clocks = <&cgu0 LGM_CLK_CBPHY2>;
+			resets = <&rcu0 0x60 0x06>,
+				 <&rcu0 0x60 0x11>,
+				 <&rcu0 0x60 0x17>,
+				 <&rcu0 0x60 0x18>;
+			reset-names = "phy", "core", "iphy0", "iphy1";
+			intel,syscfg = <&chiptop 2>;
+			intel,hsio = <&hsio1 0>;
+			intel,phy-mode = <PHY_TYPE_PCIE>;
+			#phy-cells = <1>;
+			status = "disabled";
+		};
+
+		combophy3: combophy@c0c00000 {
+			compatible = "intel,combophy-lgm", "intel,combo-phy";
+			reg = <0xc0c00000 0x40000>, <0xc0c40000 0x1000>;
+			reg-names = "core", "app";
+			clocks = <&cgu0 LGM_CLK_CBPHY3>;
+			resets = <&rcu0 0x60 0x08>,
+				 <&rcu0 0x60 0x12>,
+				 <&rcu0 0x60 0x19>,
+				 <&rcu0 0x60 0x1a>;
+			reset-names = "phy", "core", "iphy0", "iphy1";
+			intel,syscfg = <&chiptop 3>;
+			intel,hsio = <&hsio1 1>;
+			intel,phy-mode = <PHY_TYPE_PCIE>;
+			#phy-cells = <1>;
+			status = "disabled";
+		};
+
+		soc_msi: msi-controller@e00e0000 {
+			compatible = "intel,soc-msi";
+			reg = <0xe00e0000 0x800>;
+			interrupt-controller;
+			msi-controller;
+			#interrupt-cells = <1>;
+			#msi-cells = <0>;
+			dma-coherent;
+		};
+
+		pcie0: pcie@d0e00000 {
+			compatible = "intel,lgm-pcie";
+			device_type = "pci";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			reg = <0xd0e00000 0x1000>,
+			      <0xd0ec0000 0x1000>,
+			      <0xd2000000 0x20000>,
+			      <0xd0a41000 0x1000>;
+			reg-names = "dbi", "atu", "config", "app";
+			linux,pci-domain = <0>;
+			max-link-speed = <4>;
+			bus-range = <0x00 0x08>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <67 1>;
+			interrupt-names = "ir";
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0 0 0 1 &ioapic1 0x1b 1>,
+					<0 0 0 2 &ioapic1 0x1c 1>,
+					<0 0 0 3 &ioapic1 0x1d 1>,
+					<0 0 0 4 &ioapic1 0x1e 1>;
+			ranges = <0x02000000 0 0xd4000000 0xd4000000 0 0x4000000>;
+			resets = <&rcu0 0x50 0x00>;
+			reset-names = "core";
+			intel,pcie-syscon = <&chiptop>;
+			clocks = <&cgu0 LGM_GCLK_PCIE10>;
+			clock-names = "ctl";
+			phys = <&combophy0 0>;
+			phy-names = "pcie";
+			msi-parent = <&soc_msi>;
+			num-lanes = <2>;
+			reset-assert-ms = <200>;
+			status = "disabled";
+		};
+
+		pcie1: pcie@d0f00000 {
+			compatible = "intel,lgm-pcie";
+			device_type = "pci";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			reg = <0xd0f00000 0x1000>,
+			      <0xd0fc0000 0x1000>,
+			      <0xd2800000 0x20000>,
+			      <0xd0b41000 0x1000>;
+			reg-names = "dbi", "atu", "config", "app";
+			linux,pci-domain = <1>;
+			max-link-speed = <4>;
+			bus-range = <0x00 0x08>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <143 1>;
+			interrupt-names = "ir";
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0 0 0 1 &ioapic1 0x4c 1>,
+					<0 0 0 2 &ioapic1 0x4d 1>,
+					<0 0 0 3 &ioapic1 0x4e 1>,
+					<0 0 0 4 &ioapic1 0x4f 1>;
+			ranges = <0x02000000 0 0xd8000000 0xd8000000 0 0x4000000>;
+			resets = <&rcu0 0x50 0x01>;
+			reset-names = "core";
+			intel,pcie-syscon = <&chiptop>;
+			clocks = <&cgu0 LGM_GCLK_PCIE11>;
+			clock-names = "ctl";
+			phys = <&combophy0 1>;
+			phy-names = "pcie";
+			msi-parent = <&soc_msi>;
+			status = "disabled";
+		};
+
+		pcie2: pcie@d1000000 {
+			compatible = "intel,lgm-pcie";
+			device_type = "pci";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			reg = <0xd1000000 0x1000>,
+			      <0xd10c0000 0x1000>,
+			      <0xd3000000 0x20000>,
+			      <0xd0c41000 0x1000>;
+			reg-names = "dbi", "atu", "config", "app";
+			linux,pci-domain = <2>;
+			max-link-speed = <4>;
+			bus-range = <0x00 0x08>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <146 1>;
+			interrupt-names = "ir";
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0 0 0 1 &ioapic1 0x50 1>,
+					<0 0 0 2 &ioapic1 0x51 1>,
+					<0 0 0 3 &ioapic1 0x52 1>,
+					<0 0 0 4 &ioapic1 0x53 1>;
+			ranges = <0x02000000 0 0xdc000000 0xdc000000 0 0x2000000>;
+			resets = <&rcu0 0x50 0x02>;
+			reset-names = "core";
+			intel,pcie-syscon = <&chiptop>;
+			clocks = <&cgu0 LGM_GCLK_PCIE30>;
+			clock-names = "ctl";
+			phys = <&combophy1 0>;
+			phy-names = "pcie";
+			msi-parent = <&soc_msi>;
+			status = "disabled";
+		};
+
+		pcie3: pcie@d1100000 {
+			compatible = "intel,lgm-pcie";
+			device_type = "pci";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			reg = <0xd1100000 0x1000>,
+			      <0xd11c0000 0x1000>,
+			      <0xd3800000 0x20000>,
+			      <0xd0d41000 0x1000>;
+			reg-names = "dbi", "atu", "config", "app";
+			linux,pci-domain = <3>;
+			max-link-speed = <4>;
+			bus-range = <0x00 0x08>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <147 1>;
+			interrupt-names = "ir";
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0 0 0 1 &ioapic1 0x54 1>,
+					<0 0 0 2 &ioapic1 0x55 1>,
+					<0 0 0 3 &ioapic1 0x56 1>,
+					<0 0 0 4 &ioapic1 0x57 1>;
+			ranges = <0x02000000 0 0xde000000 0xde000000 0 0x2000000>;
+			resets = <&rcu0 0x50 0x03>;
+			reset-names = "core";
+			intel,pcie-syscon = <&chiptop>;
+			clocks = <&cgu0 LGM_GCLK_PCIE31>;
+			clock-names = "ctl";
+			phys = <&combophy1 1>;
+			phy-names = "pcie";
+			msi-parent = <&soc_msi>;
+			status = "disabled";
+		};
+
+		pcie4: pcie@c0e00000 {
+			compatible = "intel,lgm-pcie";
+			device_type = "pci";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			reg = <0xc0e00000 0x1000>,
+			      <0xc0ec0000 0x1000>,
+			      <0xc2000000 0x20000>,
+			      <0xc0a41000 0x1000>;
+			reg-names = "dbi", "atu", "config", "app";
+			linux,pci-domain = <4>;
+			max-link-speed = <4>;
+			bus-range = <0x00 0x08>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <144 1>;
+			interrupt-names = "ir";
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0 0 0 1 &ioapic1 0x74 1>,
+					<0 0 0 2 &ioapic1 0x75 1>,
+					<0 0 0 3 &ioapic1 0x76 1>,
+					<0 0 0 4 &ioapic1 0x77 1>;
+			ranges = <0x02000000 0 0xd4000000 0xc4000000 0 0x4000000>;
+			resets = <&rcu0 0x60 0x00>;
+			reset-names = "core";
+			intel,pcie-syscon = <&chiptop>;
+			clocks = <&cgu0 LGM_GCLK_PCIE20>;
+			clock-names = "ctl";
+			phys = <&combophy2 0>;
+			phy-names = "pcie";
+			msi-parent = <&soc_msi>;
+			num-lanes = <1>;
+			reset-assert-ms = <200>;
+			status = "disabled";
+		};
+
+		pcie5: pcie@c0f00000 {
+			compatible = "intel,lgm-pcie";
+			device_type = "pci";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			reg = <0xc0f00000 0x1000>,
+			      <0xc0fc0000 0x1000>,
+			      <0xc2800000 0x20000>,
+			      <0xc0b41000 0x1000>;
+			reg-names = "dbi", "atu", "config", "app";
+			linux,pci-domain = <5>;
+			max-link-speed = <4>;
+			bus-range = <0x00 0x08>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <145 1>;
+			interrupt-names = "ir";
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0 0 0 1 &ioapic1 0x78 1>,
+					<0 0 0 2 &ioapic1 0x79 1>,
+					<0 0 0 3 &ioapic1 0x7a 1>,
+					<0 0 0 4 &ioapic1 0x7b 1>;
+			ranges = <0x02000000 0 0xd8000000 0xc8000000 0 0x4000000>;
+			resets = <&rcu0 0x60 0x01>;
+			reset-names = "core";
+			intel,pcie-syscon = <&chiptop>;
+			clocks = <&cgu0 LGM_GCLK_PCIE21>;
+			clock-names = "ctl";
+			phys = <&combophy2 1>;
+			phy-names = "pcie";
+			msi-parent = <&soc_msi>;
+			reset-assert-ms = <200>;
+			status = "disabled";
+		};
+
+		pcie6: pcie@c1000000 {
+			compatible = "intel,lgm-pcie";
+			device_type = "pci";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			reg = <0xc1000000 0x1000>,
+			      <0xc10c0000 0x1000>,
+			      <0xc3000000 0x20000>,
+			      <0xc0c41000 0x1000>;
+			reg-names = "dbi", "atu", "config", "app";
+			linux,pci-domain = <6>;
+			max-link-speed = <4>;
+			bus-range = <0x00 0x08>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <148 1>;
+			interrupt-names = "ir";
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0 0 0 1 &ioapic1 0x7c 1>,
+					<0 0 0 2 &ioapic1 0x7d 1>,
+					<0 0 0 3 &ioapic1 0x7e 1>,
+					<0 0 0 4 &ioapic1 0x7f 1>;
+			ranges = <0x02000000 0 0xdc000000 0xcc000000 0 0x2000000>;
+			resets = <&rcu0 0x60 0x02>;
+			reset-names = "core";
+			intel,pcie-syscon = <&chiptop>;
+			clocks = <&cgu0 LGM_GCLK_PCIE40>;
+			clock-names = "ctl";
+			phys = <&combophy3 0>;
+			phy-names = "pcie";
+			msi-parent = <&soc_msi>;
+			status = "disabled";
+		};
+
+		pcie7: pcie@c1100000 {
+			compatible = "intel,lgm-pcie";
+			device_type = "pci";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			reg = <0xc1100000 0x1000>,
+			      <0xc11c0000 0x1000>,
+			      <0xc3800000 0x20000>,
+			      <0xc0d41000 0x1000>;
+			reg-names = "dbi", "atu", "config", "app";
+			linux,pci-domain = <7>;
+			max-link-speed = <4>;
+			bus-range = <0x00 0x08>;
+			interrupt-parent = <&ioapic1>;
+			interrupts = <149 1>;
+			interrupt-names = "ir";
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0 0 0 1 &ioapic1 0x80 1>,
+					<0 0 0 2 &ioapic1 0x81 1>,
+					<0 0 0 3 &ioapic1 0x82 1>,
+					<0 0 0 4 &ioapic1 0x83 1>;
+			ranges = <0x02000000 0 0xde000000 0xce000000 0 0x2000000>;
+			resets = <&rcu0 0x60 0x03>;
+			reset-names = "core";
+			intel,pcie-syscon = <&chiptop>;
+			clocks = <&cgu0 LGM_GCLK_PCIE41>;
+			clock-names = "ctl";
+			phys = <&combophy3 1>;
+			phy-names = "pcie";
+			msi-parent = <&soc_msi>;
+			status = "disabled";
+		};
+
+		isa: isa {
+			compatible = "isa";
+			#address-cells = <2>;
+			#size-cells = <1>;
+			ranges;
+
+			rtc: rtc@70 {
+				compatible = "motorola,mc146818";
+				reg = <1 0x70 2>;
+				interrupts = <8 3>;
+				interrupt-parent = <&ioapic1>;
+				ctrl-reg = <2>;
+				freq-reg = <0x26>;
+				status = "disabled";
+			};
+		};
+	};
+};

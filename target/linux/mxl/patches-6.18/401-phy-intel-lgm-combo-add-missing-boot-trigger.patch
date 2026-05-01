@@ -1,0 +1,46 @@
+From: Florian Eckert <fe@dev.tdt.de>
+Date: Fri, 19 Dec 2025 08:04:33 +0100
+Subject: [PATCH] phy: intel: phy-intel-lgm-combo: Add missing boot trigger
+
+In the current implementation, the PHY firmware is not started on the LGM.
+The PCIe RC cannot establish a connection to the PCIe EP via LTSSM, because
+the PCIe RC on the PHY is never started. Setting the bit 1 in the
+PCIE_PHY_SRAM_CSR app register boots the PHY firmware.
+
+This changes are based on patched kernel sources of the MaxLinear SDK,
+which can be found at https://github.com/maxlinear/linux
+
+Signed-off-by: Florian Eckert <fe@dev.tdt.de>
+---
+ drivers/phy/intel/phy-intel-lgm-combo.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+--- a/drivers/phy/intel/phy-intel-lgm-combo.c
++++ b/drivers/phy/intel/phy-intel-lgm-combo.c
+@@ -24,6 +24,9 @@
+ 
+ #define PAD_DIS_CFG		0x174
+ 
++#define PCIE_PHY_SRAM_CSR	0x08
++#define PCIE_PHY_SRAM_LD_DONE	BIT(1)
++
+ #define PCS_XF_ATE_OVRD_IN_2	0x3008
+ #define ADAPT_REQ_MSK		GENMASK(5, 4)
+ 
+@@ -357,6 +360,16 @@ static int intel_cbphy_init(struct phy *
+ 
+ 	cbphy->init_cnt++;
+ 
++	combo_phy_w32_off_mask(cbphy->app_base, PCIE_PHY_SRAM_CSR,
++				PCIE_PHY_SRAM_LD_DONE,
++				FIELD_PREP(PCIE_PHY_SRAM_LD_DONE, 1));
++
++	mutex_unlock(&cbphy->lock);
++
++	/* 15ms is required for the FW to take effect after load */
++	mdelay(15);
++	return 0;
++
+ err:
+ 	mutex_unlock(&cbphy->lock);
+ 

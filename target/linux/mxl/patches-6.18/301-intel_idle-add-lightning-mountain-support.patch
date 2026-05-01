@@ -1,0 +1,99 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Subject: [PATCH] intel_idle: Add Lightning Mountain support
+
+Add a cpuidle state table and idle_cpu entry for Intel Atom Airmont-NP,
+which is the CPU found on the MaxLinear Lightning Mountain (LGM) SoC.
+Four MWAIT-based C-states are exposed: C1, C6NS, C6FS and C7. The deeper
+states all set CPUIDLE_FLAG_TLB_FLUSHED; promotion to C1E is disabled to
+match how Bay Trail / Cherry Trail handle the same Atom MWAIT family.
+
+Auto-demotion is also disabled at MSR level by extending
+intel_idle_init_cstates_icpu()'s byt_cht_auto_demotion_disable() switch
+case to cover INTEL_ATOM_AIRMONT_NP. The original TDT 6.12 patch used
+the now-renamed `byt_auto_demotion_disable_flag` bool; in v6.18 the
+behaviour has moved into a per-CPU x86_vfm switch, so only that
+addition is needed.
+
+Originally based on TDT staging-patches-6.12; forward-ported to v6.18
+which renamed the auto-demotion flag and split BYT/CHT runtime
+handling out (see byt_cht_auto_demotion_disable() in
+drivers/idle/intel_idle.c).
+
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+[forward-port to v6.18]
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+
+--- a/drivers/idle/intel_idle.c
++++ b/drivers/idle/intel_idle.c
+@@ -379,6 +379,43 @@ static struct cpuidle_state byt_cstates[
+ 		.enter = NULL }
+ };
+ 
++static struct cpuidle_state lgm_cstates[] __initdata = {
++	{
++		.name = "C1",
++		.desc = "MWAIT 0x00",
++		.flags = MWAIT2flg(0x00),
++		.exit_latency = 1,
++		.target_residency = 4,
++		.enter = &intel_idle,
++		.enter_s2idle = intel_idle_s2idle, },
++	{
++		.name = "C6NS",
++		.desc = "MWAIT 0x58",
++		.flags = MWAIT2flg(0x58) | CPUIDLE_FLAG_TLB_FLUSHED,
++		.exit_latency = 50,
++		.target_residency = 200,
++		.enter = &intel_idle,
++		.enter_s2idle = intel_idle_s2idle, },
++	{
++		.name = "C6FS",
++		.desc = "MWAIT 0x52",
++		.flags = MWAIT2flg(0x52) | CPUIDLE_FLAG_TLB_FLUSHED,
++		.exit_latency = 100,
++		.target_residency = 500,
++		.enter = &intel_idle,
++		.enter_s2idle = intel_idle_s2idle, },
++	{
++		.name = "C7",
++		.desc = "MWAIT 0x52",
++		.flags = MWAIT2flg(0x52) | CPUIDLE_FLAG_TLB_FLUSHED,
++		.exit_latency = 500,
++		.target_residency = 2000,
++		.enter = &intel_idle,
++		.enter_s2idle = intel_idle_s2idle, },
++	{
++		.enter = NULL }
++};
++
+ static struct cpuidle_state cht_cstates[] __initdata = {
+ 	{
+ 		.name = "C1",
+@@ -1484,6 +1521,11 @@ static const struct idle_cpu idle_cpu_by
+ 	.disable_promotion_to_c1e = true,
+ };
+ 
++static const struct idle_cpu idle_cpu_lgm __initconst = {
++	.state_table = lgm_cstates,
++	.disable_promotion_to_c1e = true,
++};
++
+ static const struct idle_cpu idle_cpu_cht __initconst = {
+ 	.state_table = cht_cstates,
+ 	.disable_promotion_to_c1e = true,
+@@ -1638,6 +1680,7 @@ static const struct x86_cpu_id intel_idl
+ 	X86_MATCH_VFM(INTEL_ATOM_SILVERMONT,	&idle_cpu_byt),
+ 	X86_MATCH_VFM(INTEL_ATOM_SILVERMONT_MID, &idle_cpu_tangier),
+ 	X86_MATCH_VFM(INTEL_ATOM_AIRMONT,	&idle_cpu_cht),
++	X86_MATCH_VFM(INTEL_ATOM_AIRMONT_NP,	&idle_cpu_lgm),
+ 	X86_MATCH_VFM(INTEL_IVYBRIDGE,		&idle_cpu_ivb),
+ 	X86_MATCH_VFM(INTEL_IVYBRIDGE_X,	&idle_cpu_ivt),
+ 	X86_MATCH_VFM(INTEL_HASWELL,		&idle_cpu_hsw),
+@@ -2183,6 +2226,7 @@ static void __init intel_idle_init_cstat
+ 		break;
+ 	case INTEL_ATOM_SILVERMONT:
+ 	case INTEL_ATOM_AIRMONT:
++	case INTEL_ATOM_AIRMONT_NP:
+ 		byt_cht_auto_demotion_disable();
+ 		break;
+ 	}

@@ -1,0 +1,50 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Mon, 15 Dec 2025 09:05:38 +0100
+Subject: [PATCH] phy: intel-lgm-emmc: fix clk rate to phyctrl_frqsel mapping
+
+This patch fixes the mapping of the clock rate to the DLL frequency
+selection. A freqsel value of 0 stands for 200 MHz instead of 25 MHz.
+
+Fixes: 922794238330 ("phy: intel-lgm-emmc: Add support for eMMC PHY")
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ drivers/phy/intel/phy-intel-lgm-emmc.c | 20 +++++++++++++++++---
+ 1 file changed, 17 insertions(+), 3 deletions(-)
+
+--- a/drivers/phy/intel/phy-intel-lgm-emmc.c
++++ b/drivers/phy/intel/phy-intel-lgm-emmc.c
+@@ -30,7 +30,7 @@
+ #define ENDLL_SHIFT(x)		(((x) << 7) & ENDLL_MASK)
+ 
+ #define EMMC_PHYCTRL2_REG	0xb0
+-#define FRQSEL_25M		0
++#define FRQSEL_200M		0
+ #define FRQSEL_50M		1
+ #define FRQSEL_100M		2
+ #define FRQSEL_150M		3
+@@ -74,9 +74,23 @@ static int intel_emmc_phy_power(struct p
+ 
+ 	rate = clk_get_rate(priv->emmcclk);
+ 	quot = DIV_ROUND_CLOSEST(rate, 50000000);
+-	if (quot > FRQSEL_150M)
++	if (quot > 4)
+ 		dev_warn(&phy->dev, "Unsupported rate: %lu\n", rate);
+-	freqsel = clamp_t(int, quot, FRQSEL_25M, FRQSEL_150M);
++	switch (quot) {
++	case 0:
++	case 1:
++		freqsel = FRQSEL_50M;
++		break;
++	case 2:
++		freqsel = FRQSEL_100M;
++		break;
++	case 3:
++		freqsel = FRQSEL_150M;
++		break;
++	default:
++		freqsel = FRQSEL_200M;
++		break;
++	}
+ 
+ 	/*
+ 	 * According to the user manual, calpad calibration

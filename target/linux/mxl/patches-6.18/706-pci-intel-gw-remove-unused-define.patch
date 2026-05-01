@@ -1,0 +1,18 @@
+From: Florian Eckert <fe@dev.tdt.de>
+Subject: [PATCH] PCI: intel-gw: Remove unused define
+
+The C preprocessor define 'PCIE_APP_INTX_OFST' is not used in the sources
+and can therefore be deleted.
+
+Signed-off-by: Florian Eckert <fe@dev.tdt.de>
+
+--- a/drivers/pci/controller/dwc/pcie-intel-gw.c
++++ b/drivers/pci/controller/dwc/pcie-intel-gw.c
+@@ -56,7 +56,6 @@
+ #define PCIE_APP_IRN_REQ_RST		BIT(26) /* Link down from EP */
+ #define PCIE_APP_IRN_SYS_INT		BIT(28)
+ #define PCIE_APP_IRN_SYS_ERR_RC		BIT(29)
+-#define PCIE_APP_INTX_OFST		12
+ 
+ #define PCIE_APP_IRN_INT \
+ 	(PCIE_APP_IRN_AER_REPORT | PCIE_APP_IRN_PME | \

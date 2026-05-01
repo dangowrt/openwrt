@@ -1,0 +1,167 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Tue, 16 Dec 2025 12:23:29 +0100
+Subject: [PATCH] mmc: sdhci-of-arasan: Add support for Intel LGM Tap Delays
+
+Add support to set tap delays for Intel / MaxLinear LGM eMMC and SD
+controller. Use auto tuning for input clock phase delay if the degree
+value from the devicetree is 0.
+
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ drivers/mmc/host/sdhci-of-arasan.c | 110 ++++++++++++++++++++++++++++-
+ 1 file changed, 108 insertions(+), 2 deletions(-)
+
+--- a/drivers/mmc/host/sdhci-of-arasan.c
++++ b/drivers/mmc/host/sdhci-of-arasan.c
+@@ -131,6 +131,12 @@ struct sdhci_arasan_soc_ctl_map {
+ 	struct sdhci_arasan_soc_ctl_field	baseclkfreq;
+ 	struct sdhci_arasan_soc_ctl_field	clockmultiplier;
+ 	struct sdhci_arasan_soc_ctl_field	support64b;
++	struct sdhci_arasan_soc_ctl_field	tuning_count;
++	struct sdhci_arasan_soc_ctl_field	otap_delay_sel;
++	struct sdhci_arasan_soc_ctl_field	otap_delay_enable;
++	struct sdhci_arasan_soc_ctl_field	itap_delay_sel;
++	struct sdhci_arasan_soc_ctl_field	itap_delay_enable;
++	struct sdhci_arasan_soc_ctl_field	clkbufsel;
+ 	bool					hiword_update;
+ };
+ 
+@@ -228,12 +234,24 @@ static const struct sdhci_arasan_soc_ctl
+ 
+ static const struct sdhci_arasan_soc_ctl_map intel_lgm_emmc_soc_ctl_map = {
+ 	.baseclkfreq = { .reg = 0xa0, .width = 8, .shift = 2 },
++	.tuning_count = { .reg = 0xa0, .width = 6, .shift = 12 },
++	.itap_delay_sel = { .reg = 0xa8, .width = 5, .shift = 0 },
++	.itap_delay_enable = { .reg = 0xa8, .width = 1, .shift = 5 },
++	.otap_delay_sel = { .reg = 0xa8, .width = 4, .shift = 10 },
++	.otap_delay_enable = { .reg = 0xa8, .width = 1, .shift = 14 },
++	.clkbufsel = { .reg = 0xa8, .width = 3, .shift = 16 },
+ 	.clockmultiplier = { .reg = 0, .width = -1, .shift = -1 },
+ 	.hiword_update = false,
+ };
+ 
+ static const struct sdhci_arasan_soc_ctl_map intel_lgm_sdxc_soc_ctl_map = {
+ 	.baseclkfreq = { .reg = 0x80, .width = 8, .shift = 2 },
++	.tuning_count = { .reg = 0x80, .width = 6, .shift = 12 },
++	.itap_delay_sel = { .reg = 0x88, .width = 5, .shift = 0 },
++	.itap_delay_enable = { .reg = 0x88, .width = 1, .shift = 5 },
++	.otap_delay_sel = { .reg = 0x88, .width = 4, .shift = 10 },
++	.otap_delay_enable = { .reg = 0x88, .width = 1, .shift = 14 },
++	.clkbufsel = { .reg = 0x88, .width = 3, .shift = 16 },
+ 	.clockmultiplier = { .reg = 0, .width = -1, .shift = -1 },
+ 	.hiword_update = false,
+ };
+@@ -1121,6 +1139,89 @@ static const struct clk_ops versal_net_s
+ 	.set_phase = sdhci_versal_net_emmc_sampleclk_set_phase,
+ };
+ 
++/**
++ * sdhci_intel_lgm_sdcardclk_set_phase - Set the SD Output Clock Tap Delays
++ *
++ * @hw:			Pointer to the hardware clock structure.
++ * @degrees:		The clock phase shift between 0 - 359.
++ *
++ * Set the SD Output Clock Tap Delays for Output path
++ *
++ * Return: 0 on success and error value on error
++ */
++static int sdhci_intel_lgm_sdcardclk_set_phase(struct clk_hw *hw, int degrees)
++{
++	struct sdhci_arasan_clk_data *clk_data =
++		container_of(hw, struct sdhci_arasan_clk_data, sdcardclk_hw);
++	struct sdhci_arasan_data *sdhci_arasan =
++		container_of(clk_data, struct sdhci_arasan_data, clk_data);
++	const struct sdhci_arasan_soc_ctl_map *soc_ctl_map =
++		sdhci_arasan->soc_ctl_map;
++	struct sdhci_host *host = sdhci_arasan->host;
++	u8 tap_delay, tap_max = 16;
++	bool tap_enable = false;
++
++	tap_delay = (degrees * tap_max) / 360;
++
++	if (host->timing > MMC_TIMING_LEGACY)
++		tap_enable = true;
++
++	sdhci_arasan_syscon_write(host, &soc_ctl_map->otap_delay_sel,
++				  tap_delay);
++	sdhci_arasan_syscon_write(host, &soc_ctl_map->otap_delay_enable,
++				  tap_enable);
++	return 0;
++}
++
++static const struct clk_ops intel_lgm_sdcardclk_ops = {
++	.recalc_rate = sdhci_arasan_sdcardclk_recalc_rate,
++	.set_phase = sdhci_intel_lgm_sdcardclk_set_phase,
++};
++
++/**
++ * sdhci_intel_lgm_sampleclk_set_phase - Set the SD Input Clock Tap Delays
++ *
++ * @hw:			Pointer to the hardware clock structure.
++ * @degrees:		The clock phase shift between 0 - 359.
++ *
++ * Set the SD Input Clock Tap Delays for Input path
++ *
++ * Return: 0 on success and error value on error
++ */
++static int sdhci_intel_lgm_sampleclk_set_phase(struct clk_hw *hw, int degrees)
++{
++	struct sdhci_arasan_clk_data *clk_data =
++		container_of(hw, struct sdhci_arasan_clk_data, sampleclk_hw);
++	struct sdhci_arasan_data *sdhci_arasan =
++		container_of(clk_data, struct sdhci_arasan_data, clk_data);
++	const struct sdhci_arasan_soc_ctl_map *soc_ctl_map =
++		sdhci_arasan->soc_ctl_map;
++	struct sdhci_host *host = sdhci_arasan->host;
++	u8 tap_delay, tap_max = 32;
++	bool tap_enable = false;
++
++	tap_delay = (degrees * tap_max) / 360;
++
++	/* enable input clock tap delay only if tap_delay > 0, otherwise use
++	 * auto tuning.
++	 */
++	if (tap_delay)
++		tap_enable = true;
++
++	sdhci_arasan_syscon_write(host, &soc_ctl_map->clkbufsel, 7);
++	sdhci_arasan_syscon_write(host, &soc_ctl_map->tuning_count, 32);
++	sdhci_arasan_syscon_write(host, &soc_ctl_map->itap_delay_sel,
++				  tap_delay);
++	sdhci_arasan_syscon_write(host, &soc_ctl_map->itap_delay_enable,
++				  tap_enable);
++	return 0;
++}
++
++static const struct clk_ops intel_lgm_sampleclk_ops = {
++	.recalc_rate = sdhci_arasan_sampleclk_recalc_rate,
++	.set_phase = sdhci_intel_lgm_sampleclk_set_phase,
++};
++
+ static void arasan_zynqmp_dll_reset(struct sdhci_host *host, u32 deviceid)
+ {
+ 	u16 clk;
+@@ -1434,16 +1535,21 @@ static struct sdhci_arasan_of_data sdhci
+ 	.clk_ops = &arasan_clk_ops,
+ };
+ 
++static const struct sdhci_arasan_clk_ops intel_lgm_clk_ops = {
++	.sdcardclk_ops = &intel_lgm_sdcardclk_ops,
++	.sampleclk_ops = &intel_lgm_sampleclk_ops,
++};
++
+ static struct sdhci_arasan_of_data intel_lgm_emmc_data = {
+ 	.soc_ctl_map = &intel_lgm_emmc_soc_ctl_map,
+ 	.pdata = &sdhci_arasan_cqe_pdata,
+-	.clk_ops = &arasan_clk_ops,
++	.clk_ops = &intel_lgm_clk_ops,
+ };
+ 
+ static struct sdhci_arasan_of_data intel_lgm_sdxc_data = {
+ 	.soc_ctl_map = &intel_lgm_sdxc_soc_ctl_map,
+ 	.pdata = &sdhci_arasan_cqe_pdata,
+-	.clk_ops = &arasan_clk_ops,
++	.clk_ops = &intel_lgm_clk_ops,
+ };
+ 
+ static const struct sdhci_pltfm_data sdhci_arasan_zynqmp_pdata = {

@@ -1,0 +1,25 @@
+leds: lgm-sso: do not set BLINK_R in FPID auto-update mode
+
+SSO_CON0_BLINK_R selects between vendor's regular and high-speed
+update path. Mainline lgm-sso enables BLINK_R unconditionally for both
+FPID and GPTC modes; the vendor driver only sets it for GPTC-HS and
+leaves it cleared for FPID. With BLINK_R asserted in FPID mode the
+FPID auto-update divider doesn't actually tick, so writes to SSO_CPU
+never reach the shift register.
+
+Match the vendor's behaviour for FPID: clear BLINK_R so the FPID
+divider in SSO_CON1 actually drives the auto-update.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/drivers/leds/blink/leds-lgm-sso.c
++++ b/drivers/leds/blink/leds-lgm-sso.c
+@@ -531,8 +531,7 @@ static int sso_gpio_freq_set(struct sso_
+ 		regmap_update_bits(priv->mmap, SSO_CON1, SSO_CON1_US,
+ 				   FIELD_PREP(SSO_CON1_US, US_SW));
+ 	} else if (freq_idx < FPID_FREQ_RANK_MAX) {
+-		regmap_update_bits(priv->mmap, SSO_CON0, SSO_CON0_BLINK_R,
+-				   SSO_CON0_BLINK_R);
++		regmap_update_bits(priv->mmap, SSO_CON0, SSO_CON0_BLINK_R, 0);
+ 		regmap_update_bits(priv->mmap, SSO_CON1, SSO_CON1_US,
+ 				   FIELD_PREP(SSO_CON1_US, US_FPID));
+ 		regmap_update_bits(priv->mmap, SSO_CON1, SSO_CON1_FPID,

@@ -1,0 +1,41 @@
+leds: lgm-sso: keep DUTY_CYCLE at full in non-HS modes
+
+Vendor stock firmware sets DUTY_CYCLE to 0xff for every active LED
+output and never changes it after init; on/off is driven entirely by
+SSO_CPU bit toggles. Mainline lgm-sso instead writes
+DUTY_CYCLE(pin) = brightness in sso_led_brightness_set() — and seeds
+DUTY_CYCLE(pin) = brightness (= 0) in sso_led_hw_cfg(). With duty
+cycle at 0 the SSO output is held at idle level regardless of the
+SSO_CPU bit, so subsequent bit toggles never reach the external shift
+register and the LED state never changes. SW/FPID modes don't use
+PWM dimming, so this duty-cycle-from-brightness path is wrong on
+real boards regardless.
+
+Seed DUTY_CYCLE to LED_FULL on LED creation and stop touching it from
+brightness_set(). PWM dimming via DUTY_CYCLE only applies in GPTC-HS
+mode and the corresponding write can be added back behind that gate
+when HS support is hooked up.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/drivers/leds/blink/leds-lgm-sso.c
++++ b/drivers/leds/blink/leds-lgm-sso.c
+@@ -242,7 +242,6 @@ static void sso_led_brightness_set(struc
+ 	desc = &led->desc;
+ 
+ 	desc->brightness = brightness;
+-	regmap_write(priv->mmap, DUTY_CYCLE(desc->pin), brightness);
+ 
+ 	if (brightness == LED_OFF)
+ 		val = 0;
+@@ -337,10 +336,8 @@ static void sso_led_hw_cfg(struct sso_le
+ 		regmap_update_bits(priv->mmap, SSO_CON3, BIT(desc->pin),
+ 				   1 << desc->pin);
+ 
+-	/* set brightness */
+-	regmap_write(priv->mmap, DUTY_CYCLE(desc->pin), desc->brightness);
++	regmap_write(priv->mmap, DUTY_CYCLE(desc->pin), LED_FULL);
+ 
+-	/* enable output */
+ 	if (!desc->hw_trig && desc->brightness)
+ 		gpiod_set_value(led->gpiod, 1);
+ }

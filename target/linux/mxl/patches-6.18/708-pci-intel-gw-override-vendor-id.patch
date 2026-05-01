@@ -1,0 +1,52 @@
+From: Florian Eckert <fe@dev.tdt.de>
+Subject: [PATCH] PCI: intel-gw: Override vendor ID
+
+Overwrite the PCIe RC vendor/device ID at probe time so downstream
+detection (e.g. MaxLinear DSL stack) sees the expected MxL ID.
+
+The override has to be done after intel_pcie_ltssm_disable() has
+masked the LTSSM, otherwise the DBI accesses can hang the bus on
+some boards (observed on MxL25641-HDK-6 / URX641).
+
+Signed-off-by: Florian Eckert <fe@dev.tdt.de>
+[reorder call site to after ltssm_disable to avoid bus hang on URX641]
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/drivers/pci/controller/dwc/pcie-intel-gw.c
++++ b/drivers/pci/controller/dwc/pcie-intel-gw.c
+@@ -23,6 +23,9 @@
+ #define PORT_AFR_N_FTS_GEN3		180
+ #define PORT_AFR_N_FTS_GEN4		196
+ 
++/* PCIe RC Configuration Register */
++#define PCIE_RC_VDID 0x00
++
+ /* PCIe Application logic Registers */
+ #define PCIE_APP_CCR			0x10
+ #define PCIE_APP_CCR_LTSSM_ENABLE	BIT(0)
+@@ -220,6 +223,15 @@ static void intel_pcie_core_irq_disable(
+ 	pcie_app_wr(pcie, PCIE_APP_IRNCR, PCIE_APP_IRN_INT);
+ }
+ 
++static void intel_pcie_vendor_id_overwrite(struct intel_pcie *pcie)
++{
++	pcie_rc_cfg_wr_mask(pcie, PCIE_MISC_CONTROL_1_OFF, PCIE_DBI_RO_WR_EN,
++			    PCIE_DBI_RO_WR_EN);
++	pcie_rc_cfg_wr(pcie, PCIE_RC_VDID, 0x008017e6);
++	pcie_rc_cfg_wr_mask(pcie, PCIE_MISC_CONTROL_1_OFF, PCIE_DBI_RO_WR_EN,
++			    0);
++}
++
+ static int intel_pcie_get_resources(struct platform_device *pdev)
+ {
+ 	struct intel_pcie *pcie = platform_get_drvdata(pdev);
+@@ -337,6 +349,10 @@ static int intel_pcie_host_setup(struct
+ 	intel_pcie_ltssm_disable(pcie);
+ 	intel_pcie_link_setup(pcie);
+ 	intel_pcie_init_n_fts(pci);
++
++	/* Overwrite pcie vendor ID so MxL DSL is happy */
++	intel_pcie_vendor_id_overwrite(pcie);
++
+ 	dw_pcie_upconfig_setup(pci);
+ 
+ 	intel_pcie_core_irq_enable(pcie);

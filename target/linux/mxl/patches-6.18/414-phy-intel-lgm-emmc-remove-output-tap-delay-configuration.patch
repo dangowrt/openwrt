@@ -1,0 +1,54 @@
+From: Martin Schiller <ms@dev.tdt.de>
+Date: Tue, 16 Dec 2025 09:51:34 +0100
+Subject: [PATCH] phy: intel-lgm-emmc: remove output tap delay configuration
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Both the output and input tap delay can be configured differently for
+the various MMC speeds. To handle this correctly in the system, these
+parameters should be set via the mmc controller driver using
+“clk-phase-<speed>”.
+
+To avoid any conflicts, we will remove the OTAPDLY settings here.
+
+Signed-off-by: Martin Schiller <ms@dev.tdt.de>
+---
+ drivers/phy/intel/phy-intel-lgm-emmc.c | 19 -------------------
+ 1 file changed, 19 deletions(-)
+
+--- a/drivers/phy/intel/phy-intel-lgm-emmc.c
++++ b/drivers/phy/intel/phy-intel-lgm-emmc.c
+@@ -24,9 +24,6 @@
+ #define DR_TY_66OHM		0x2
+ #define DR_TY_100OHM		0x3
+ #define DR_TY_40OHM		0x4
+-#define OTAPDLYENA		BIT(14)
+-#define OTAPDLYSEL_MASK		GENMASK(13, 10)
+-#define OTAPDLYSEL_SHIFT(x)	(((x) << 10) & OTAPDLYSEL_MASK)
+ 
+ #define EMMC_PHYCTRL1_REG	0xac
+ #define PDB_MASK		BIT(0)
+@@ -235,22 +232,6 @@ static int intel_emmc_phy_power_on(struc
+ 		return ret;
+ 	}
+ 
+-	/* Output tap delay: disable */
+-	ret = regmap_update_bits(priv->syscfg, EMMC_PHYCTRL0_REG, OTAPDLYENA,
+-				 0);
+-	if (ret) {
+-		dev_err(&phy->dev, "ERROR Set output tap delay : %d\n", ret);
+-		return ret;
+-	}
+-
+-	/* Output tap delay */
+-	ret = regmap_update_bits(priv->syscfg, EMMC_PHYCTRL0_REG,
+-				 OTAPDLYSEL_MASK, OTAPDLYSEL_SHIFT(4));
+-	if (ret) {
+-		dev_err(&phy->dev, "ERROR: output tap dly select: %d\n", ret);
+-		return ret;
+-	}
+-
+ 	/* Power up eMMC phy analog blocks */
+ 	return intel_emmc_phy_power(phy, true);
+ }

@@ -1,0 +1,112 @@
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Wed, 29 Apr 2026 04:00:00 +0200
+Subject: [PATCH] x86/boot: optionally place a startup_64 trampoline at offset 0
+ of vmlinux
+
+Some primitive bootloaders ignore the bzImage setup_header and the
+entry point fields of legacy uImage / FIT image headers, and instead
+jump to the kernel image's load address in 64-bit long mode (with
+%rsi pointing at boot_params).
+
+Pre-v6.18 such loaders worked because the linker script placed
+startup_64() (arch/x86/kernel/head_64.S) at offset 0 of the loaded
+image via the .head.text section. Commit ce39a6aa8802 ("x86/boot:
+Move startup_64() into .init.text") together with commit
+c5c30a373693 ("x86/boot: Drop ".head.text" section") removed that
+guarantee, so `objcopy -O binary vmlinux` no longer starts with valid
+64-bit kernel-entry code.
+
+Add an opt-in CONFIG_X86_HEAD_TEXT_TRAMPOLINE which re-introduces a
+tiny .head.text section containing a single near jmp to startup_64()
+at the head of the kernel image. Normal bzImage boot is unaffected
+because the boot decompressor enters startup_64() directly. Cost is
+five bytes in the linked vmlinux.
+
+Required for booting MaxLinear LGM/URX gateway SoCs with the vendor
+U-Boot's setup_header_default workaround.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -2119,6 +2119,29 @@ config X86_NEED_RELOCS
+ 	depends on RANDOMIZE_BASE || (X86_32 && RELOCATABLE)
+ 	select ARCH_VMLINUX_NEEDS_RELOCS
+ 
++config X86_HEAD_TEXT_TRAMPOLINE
++	bool "Place a trampoline to startup_64 at offset 0 of vmlinux"
++	depends on X86_64
++	help
++	  Some primitive bootloaders ignore the bzImage setup_header and
++	  the entry point fields of legacy uImage / FIT image headers, and
++	  instead jump to the kernel image's load address in 64-bit long
++	  mode. Pre-v6.18 such loaders worked because the linker script
++	  placed startup_64() (arch/x86/kernel/head_64.S) at offset 0 of
++	  the loaded image via the .head.text section. Commit
++	  ce39a6aa8802 ("x86/boot: Move startup_64() into .init.text") and
++	  commit c5c30a373693 ("x86/boot: Drop ".head.text" section")
++	  removed that guarantee.
++
++	  Saying Y here re-introduces a tiny .head.text section containing
++	  a single near jmp to startup_64() at the start of the kernel
++	  image. Normal bzImage boot is unaffected because the boot
++	  decompressor enters startup_64() directly. The cost is 5 bytes
++	  in the linked vmlinux.
++
++	  Required for booting MaxLinear LGM/URX gateway SoCs with their
++	  vendor U-Boot. If unsure, say N.
++
+ config PHYSICAL_ALIGN
+ 	hex "Alignment value to which kernel should be aligned"
+ 	default "0x200000"
+--- a/arch/x86/kernel/Makefile
++++ b/arch/x86/kernel/Makefile
+@@ -50,6 +50,7 @@ CFLAGS_irq.o := -I $(src)/../include/asm
+ 
+ obj-y			+= head_$(BITS).o
+ obj-y			+= head$(BITS).o
++obj-$(CONFIG_X86_HEAD_TEXT_TRAMPOLINE)	+= head_trampoline.o
+ obj-y			+= ebda.o
+ obj-y			+= platform-quirks.o
+ obj-y			+= process_$(BITS).o signal.o signal_$(BITS).o
+--- /dev/null
++++ b/arch/x86/kernel/head_trampoline.S
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Tiny trampoline placed at offset 0 of vmlinux's `_text` so that a
++ * raw `objcopy -O binary vmlinux` payload can be entered at its load
++ * address by primitive bootloaders that ignore the bzImage entry/
++ * setup_header and just jump to load_addr in 64-bit long mode (e.g.
++ * MaxLinear LGM/URX vendor U-Boot's setup_header_default workaround).
++ *
++ * The instruction is a 5-byte near jmp with rel32 displacement, so it
++ * works at any load address as long as the kernel image was placed in
++ * memory contiguously. Normal bzImage boot bypasses this by entering
++ * startup_64() directly from the decompressor, leaving the stub dead
++ * code at runtime.
++ */
++
++#include <linux/linkage.h>
++
++	.section .head.text, "ax"
++SYM_CODE_START(_head_trampoline)
++	jmp	startup_64
++SYM_CODE_END(_head_trampoline)
+--- a/arch/x86/kernel/vmlinux.lds.S
++++ b/arch/x86/kernel/vmlinux.lds.S
+@@ -132,6 +132,15 @@ SECTIONS
+ 		_text = .;
+ 		__pi__text = .;
+ 		_stext = .;
++#ifdef CONFIG_X86_HEAD_TEXT_TRAMPOLINE
++		/*
++		 * Place a tiny .head.text trampoline at offset 0 of the
++		 * loaded image so primitive bootloaders that jump to
++		 * load_addr in long mode (instead of using the bzImage
++		 * boot protocol) hit a near jmp to startup_64().
++		 */
++		HEAD_TEXT
++#endif
+ 		ALIGN_ENTRY_TEXT_BEGIN
+ 		*(.text..__x86.rethunk_untrain)
+ 		ENTRY_TEXT

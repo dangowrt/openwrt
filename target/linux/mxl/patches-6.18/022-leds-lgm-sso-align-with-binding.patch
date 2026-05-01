@@ -1,0 +1,43 @@
+From: Daniel Golle <daniel@makrotopia.org>
+Subject: [PATCH] leds: lgm-sso: align driver with leds-lgm.yaml binding
+
+The leds-lgm.yaml binding documents the per-LED subnode container as
+"led-controller" and the per-LED GPIO property as "led-gpios"
+(updated by Rob Herring in 121164481b79). The driver, however, looks
+for a child node named "ssoled" and resolves the GPIO via con_id NULL,
+which translates to property names "gpios" / "gpio". As a result, any
+DT that follows the documented binding gets no LEDs registered.
+
+Look up the documented "led-controller" subnode first, falling back
+to "ssoled"; resolve each LED's GPIO with con_id "led" first, falling
+back to NULL. Both fallbacks preserve compatibility with existing
+devicetrees (DT is ABI).
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/drivers/leds/blink/leds-lgm-sso.c
++++ b/drivers/leds/blink/leds-lgm-sso.c
+@@ -637,8 +637,12 @@ __sso_led_dt_parse(struct sso_led_priv *
+ 		led->priv = priv;
+ 		desc = &led->desc;
+ 
+-		led->gpiod = devm_fwnode_gpiod_get(dev, fwnode_child, NULL,
++		led->gpiod = devm_fwnode_gpiod_get(dev, fwnode_child, "led",
+ 						   GPIOD_ASIS, NULL);
++		if (PTR_ERR(led->gpiod) == -ENOENT)
++			led->gpiod = devm_fwnode_gpiod_get(dev, fwnode_child,
++							   NULL, GPIOD_ASIS,
++							   NULL);
+ 		if (IS_ERR(led->gpiod)) {
+ 			ret = dev_err_probe(dev, PTR_ERR(led->gpiod), "led: get gpio fail!\n");
+ 			goto __dt_err;
+@@ -728,7 +732,9 @@ static int sso_led_dt_parse(struct sso_l
+ 	if (!count)
+ 		return 0;
+ 
+-	fw_ssoled = fwnode_get_named_child_node(fwnode, "ssoled");
++	fw_ssoled = fwnode_get_named_child_node(fwnode, "led-controller");
++	if (!fw_ssoled)
++		fw_ssoled = fwnode_get_named_child_node(fwnode, "ssoled");
+ 	if (fw_ssoled) {
+ 		ret = __sso_led_dt_parse(priv, fw_ssoled);
+ 		fwnode_handle_put(fw_ssoled);

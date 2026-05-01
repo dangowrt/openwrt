@@ -1,0 +1,29 @@
+leds: lgm-sso: default shift clock to 12.5 MHz instead of leaving FCDSC at fastest
+
+sso_register_shift_clk() iterates shift_clk_freq_tbl looking for the
+highest entry <= priv->gpio.shift_clk_freq, and falls back to val=0
+(25 MHz, the fastest divider) when no DT property has set the rate.
+On boards whose external shift register can't keep up at 25 MHz the
+data clocked out becomes unreliable: writes to SSO_CPU appear to take
+effect only intermittently and the chain is left in a stale state.
+
+Vendor's split sso-led driver hard-codes 12.5 MHz in its clock-source
+setup (FCDSC_12_5MHZ) and is the rate the in-the-field LGM boards are
+known to work with.
+
+Default priv->gpio.shift_clk_freq to 12500000 so the divider lookup
+selects 12.5 MHz when no override is provided. The warning about
+"Invalid freq -1" disappears and FCDSC ends up at 1, matching vendor.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+--- a/drivers/leds/blink/leds-lgm-sso.c
++++ b/drivers/leds/blink/leds-lgm-sso.c
+@@ -761,7 +761,7 @@ static int sso_probe_gpios(struct sso_le
+ 		priv->gpio.freq = 0;
+ 
+ 	priv->gpio.edge = DATA_CLK_EDGE;
+-	priv->gpio.shift_clk_freq = -1;
++	priv->gpio.shift_clk_freq = 12500000;
+ 
+ 	ret = sso_gpio_hw_init(priv);
+ 	if (ret)

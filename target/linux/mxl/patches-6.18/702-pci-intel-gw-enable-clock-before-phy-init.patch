@@ -1,0 +1,67 @@
+From: Florian Eckert <fe@dev.tdt.de>
+Date: Fri, 19 Dec 2025 10:12:33 +0100
+Subject: [PATCH] PCI: intel-gw: Enable clock before phy init
+
+To ensure that the boot sequence is correct, the dwc pcie core clock must
+be switched on before phy init call.
+
+This changes are based on patched kernel sources of the MaxLinear SDK,
+which can be found at https://github.com/maxlinear/linux
+
+Signed-off-by: Florian Eckert <fe@dev.tdt.de>
+---
+ drivers/pci/controller/dwc/pcie-intel-gw.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+--- a/drivers/pci/controller/dwc/pcie-intel-gw.c
++++ b/drivers/pci/controller/dwc/pcie-intel-gw.c
+@@ -292,13 +292,9 @@ static int intel_pcie_host_setup(struct
+ 
+ 	intel_pcie_core_rst_assert(pcie);
+ 	intel_pcie_device_rst_assert(pcie);
+-
+-	ret = phy_init(pcie->phy);
+-	if (ret)
+-		return ret;
+-
+ 	intel_pcie_core_rst_deassert(pcie);
+ 
++	/* Controller clock must be provided earlier than PHY */
+ 	ret = clk_prepare_enable(pcie->core_clk);
+ 	if (ret) {
+ 		dev_err(pcie->pci.dev, "Core clock enable failed: %d\n", ret);
+@@ -307,13 +303,17 @@ static int intel_pcie_host_setup(struct
+ 
+ 	pci->atu_base = pci->dbi_base + 0xC0000;
+ 
++	ret = phy_init(pcie->phy);
++	if (ret)
++		goto phy_err;
++
+ 	intel_pcie_ltssm_disable(pcie);
+ 	intel_pcie_link_setup(pcie);
+ 	intel_pcie_init_n_fts(pci);
+ 
+ 	ret = dw_pcie_setup_rc(&pci->pp);
+ 	if (ret)
+-		goto app_init_err;
++		goto phy_err;
+ 
+ 	dw_pcie_upconfig_setup(pci);
+ 
+@@ -322,13 +322,13 @@ static int intel_pcie_host_setup(struct
+ 
+ 	ret = dw_pcie_wait_for_link(pci);
+ 	if (ret)
+-		goto app_init_err;
++		goto phy_err;
+ 
+ 	intel_pcie_core_irq_enable(pcie);
+ 
+ 	return 0;
+ 
+-app_init_err:
++phy_err:
+ 	clk_disable_unprepare(pcie->core_clk);
+ clk_err:
+ 	intel_pcie_core_rst_assert(pcie);

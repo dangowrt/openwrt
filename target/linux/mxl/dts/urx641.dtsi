@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/*
+ * SoC device tree for the MaxLinear URX641 (Lightning Mountain)
+ * x86_64 gateway SoC. URX641 is a 2-core variant of the LGM family;
+ * cpu@8 / cpu@a are not fitted and are removed here.
+ */
+
+#include "lightning_mountain.dtsi"
+
+/ {
+	compatible = "mxl,urx641", "mxl,lgm", "intel,lgm";
+
+	cpus {
+		/delete-node/ cpu@8;
+		/delete-node/ cpu@a;
+	};
+};

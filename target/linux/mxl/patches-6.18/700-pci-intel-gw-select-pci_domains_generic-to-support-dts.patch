@@ -1,0 +1,24 @@
+From: Florian Eckert <fe@dev.tdt.de>
+Date: Fri, 19 Dec 2025 09:17:24 +0100
+Subject: [PATCH] PCI: intel-gw: Select PCI_DOMAINS_GENERIC to support DTS
+ option linux,pci-domain
+
+The 'intel-gw' driver uses an x86 architecture that uses a 'DTS' for system
+configuration instead of 'ACPI'. To configure the domain number via 'DTS',
+the config option 'PCI_DOMAINS_GENERIC' option must be enabled.
+
+Signed-off-by: Florian Eckert <fe@dev.tdt.de>
+---
+ drivers/pci/controller/dwc/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/pci/controller/dwc/Kconfig
++++ b/drivers/pci/controller/dwc/Kconfig
+@@ -178,6 +178,7 @@ config PCIE_INTEL_GW
+ 	depends on OF && (X86 || COMPILE_TEST)
+ 	depends on PCI_MSI
+ 	select PCIE_DW_HOST
++	select PCI_DOMAINS_GENERIC
+ 	help
+ 	  Say 'Y' here to enable PCIe Host controller support on Intel
+ 	  Gateway SoCs.
