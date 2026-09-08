@@ -1,0 +1,45 @@
+From 0aed08c6a47fd68500cde6f358ddf362f42f7974 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Tue, 8 Sep 2026 18:45:20 +0100
+Subject: [PATCH] pylibfdt: use Python 3 C API names in libfdt.i_shipped
+
+SWIG 4.5.0 removed the Python 2 compatibility macros from its Python
+runtime, so the typemaps that still spell PyString_FromString,
+PyString_AsString and PyInt_AsLong no longer compile:
+
+  libfdt_wrap.c:5618:20: error: implicit declaration of function 'PyInt_AsLong'
+
+Use the Python 3 functions those macros expanded to.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+---
+ scripts/dtc/pylibfdt/libfdt.i_shipped | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+--- a/scripts/dtc/pylibfdt/libfdt.i_shipped
++++ b/scripts/dtc/pylibfdt/libfdt.i_shipped
+@@ -1033,7 +1033,7 @@ typedef uint32_t fdt32_t;
+ 	PyObject *buff;
+ 
+ 	if ($1) {
+-		resultobj = PyString_FromString(
++		resultobj = PyUnicode_FromString(
+ 			fdt_string(fdt1, fdt32_to_cpu($1->nameoff)));
+ 		buff = PyByteArray_FromStringAndSize(
+ 			(const char *)($1 + 1), fdt32_to_cpu($1->len));
+@@ -1064,13 +1064,13 @@ typedef uint32_t fdt32_t;
+         }
+         $1 = PyBytes_AsString($input);
+     %#else
+-        $1 = PyString_AsString($input);   /* char *str */
++        $1 = PyBytes_AsString($input);   /* char *str */
+     %#endif
+ }
+ 
+ /* typemaps used for fdt_next_node() */
+ %typemap(in, numinputs=1) int *depth (int depth) {
+-   depth = (int) PyInt_AsLong($input);
++   depth = (int) PyLong_AsLong($input);
+    $1 = &depth;
+ }
+ 
