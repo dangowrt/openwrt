@@ -318,13 +318,13 @@ define KernelPackage/iommu-vsi
   DEPENDS:=@TARGET_rockchip_armv8
   KCONFIG:=CONFIG_VSI_IOMMU
   FILES:=$(LINUX_DIR)/drivers/iommu/vsi-iommu.ko
-  AUTOLOAD:=$(call AutoProbe,vsi-iommu,1)
+  AUTOLOAD:=$(call AutoProbe,vsi-iommu)
 endef
 
 define KernelPackage/iommu-vsi/description
   Driver for the Verisilicon IOMMU in front of the RK3588 AV1 video
   decoder, which lets the decoder use frame buffers that are not
-  physically contiguous. It loads at boot, before the decoder probes.
+  physically contiguous.
 endef
 
 $(eval $(call KernelPackage,iommu-vsi))
