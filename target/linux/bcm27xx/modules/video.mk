@@ -154,7 +154,9 @@ define KernelPackage/drm-vc4
   DEPENDS:= \
     @TARGET_bcm27xx +kmod-drm +kmod-drm-exec \
     +kmod-drm-display-helper +kmod-drm-dma-helper \
-    +kmod-cec-core +kmod-sound-core +kmod-sound-soc-core
+    +kmod-cec-core +kmod-sound-core +kmod-sound-soc-core \
+    +(TARGET_bcm27xx_bcm2708||TARGET_bcm27xx_bcm2709||TARGET_bcm27xx_bcm2710):kmod-i2c-bcm2835 \
+    +(TARGET_bcm27xx_bcm2711||TARGET_bcm27xx_bcm2712):kmod-i2c-brcmstb
   KCONFIG:= \
     CONFIG_DRM_VC4 \
     CONFIG_DRM_VC4_HDMI_CEC=y
